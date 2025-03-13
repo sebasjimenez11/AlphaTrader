@@ -12,7 +12,7 @@ class AuthController {
     // Aquí se asume que passport ya colocó el usuario en req.user
     try {
     
-    const response = await this.authService.findOrCreateByOAuth(req.user);
+    const response = await this.authService.findOrCreateByOAuth(req.userData);
     res.status(response.codeStatus).json(response);
       
     } catch (error) {

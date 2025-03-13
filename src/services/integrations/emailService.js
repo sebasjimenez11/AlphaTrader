@@ -5,7 +5,6 @@ dotenv.config();
 
 // Configurar la API Key de SendGrid
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-console.log('API Key de SendGrid configurada', process.env.SENDGRID_API_KEY);
 /**
  * Enviar un correo electrónico usando SendGrid
  * @param {string} to - Dirección de correo del destinatario
@@ -14,9 +13,6 @@ console.log('API Key de SendGrid configurada', process.env.SENDGRID_API_KEY);
  * @returns {Promise<object>}
  */
 export const sendEmail = async (to, subject, htmlContent) => {
-    console.log('Enviando correo a', to);
-    console.log('remitente del correo', process.env.SENDGRID_SENDER_EMAIL);
-
   try {
     const msg = {
       to,
@@ -26,7 +22,6 @@ export const sendEmail = async (to, subject, htmlContent) => {
     };
 
     const response = await sgMail.send(msg);
-    console.log(`Correo enviado a ${to}`);
     return response;
   } catch (error) {
     console.error('Error al enviar correo:', error.response?.body || error);

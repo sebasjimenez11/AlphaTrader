@@ -1,40 +1,47 @@
 // src/services/userService.js
 import bcrypt from 'bcrypt';
-import { getId } from '../utils/uuid';
+import { generateToken } from '../utils/jwt';
 
 class UserService {
   constructor(userRepository) {
     this.userRepository = userRepository;
   }
 
-  async registerUser({ email, password, fullName, dateOfBirth }) {
+  async registerUser({ email, password, fullName, dateOfBirth, telefono }) {
     const existingUser = await this.userRepository.findByEmail(email);
     if (existingUser) {
-      throw new Error('El usuario ya existe');
+      return {
+        statusCode: 400,
+        status: false,
+        message: 'El usuario ya existe',
+      };
     }
     const hashedPassword = await bcrypt.hash(password, 10);
-    return await this.userRepository.create({
+    const register = await this.userRepository.create({
       Email: email,
       FullName: fullName,
       DateOfBirth: dateOfBirth,
       Status: true,
+      Telefono: telefono,
       Password: hashedPassword,
     });
+
+    if (!register) {
+      return {
+        statusCode: 400,
+        status: false,
+        message: 'Error al crear el usuario',
+      };
+    } else {
+      return {
+        statusCode: 201,
+        token: generateToken(register),
+        status: true,
+        message: 'Usuario creado con éxito',
+      };
+    }
   }
 
-  async loginUser({ email, password }) {
-    const user = await this.userRepository.findByEmail(email);
-    if (!user) {
-      throw new Error('Usuario no encontrado');
-    }
-    const isMatch = await bcrypt.compare(password, user.Password);
-    if (!isMatch) {
-      throw new Error('Contraseña incorrecta');
-    }
-    return user;
-  }
-
-  
   async findUserById(id) {
     return await this.userRepository.findById(id);
   }
@@ -53,7 +60,7 @@ class UserService {
     await user.save();
     return user;
   }
-  
+
 }
 
 export default UserService;

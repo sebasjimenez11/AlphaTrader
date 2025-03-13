@@ -26,16 +26,20 @@ class AuthService {
   }
 
   async findOrCreateByOAuth(data) {
+    const { email, name } = data; // Extraer email y name correctamente
+  
     let user = await this.userRepository.findByEmail(email);
     if (!user) {
       const newUser = {
         ID: getId(),
         Email: email,
         Name: name,
-        Status: !!dateOfBirth, // true si tiene fecha de nacimiento
+        Status: true, // Suponiendo que siempre está activo si se registra
       };
+  
       const userDto = new UserDto(newUser);
       user = await this.userRepository.create(userDto.toJSON());
+  
       if (!user) {
         return {
           codeStatus: 400,
@@ -43,6 +47,7 @@ class AuthService {
           message: "Error al crear el usuario",
         };
       }
+  
       return {
         codeStatus: 201,
         status: true,
@@ -50,13 +55,14 @@ class AuthService {
         message: "Usuario creado con éxito",
       };
     }
+  
     return {
       codeStatus: 200,
       status: true,
       token: generateToken(user),
       message: "Usuario autenticado con éxito",
     };
-  }
+  }  
 }
 
 export default AuthService;

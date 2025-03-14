@@ -11,8 +11,10 @@ class AuthController {
   async oauthCallback(req, res) {
     // Aquí se asume que passport ya colocó el usuario en req.user
     try {
+      console.log(req.user);
+      
     
-    const response = await this.authService.findOrCreateByOAuth(req.userData);
+    const response = await this.authService.findOrCreateByOAuth(req.user);
     res.status(response.codeStatus).json(response);
       
     } catch (error) {

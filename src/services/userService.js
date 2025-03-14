@@ -1,6 +1,6 @@
 // src/services/userService.js
 import bcrypt from 'bcrypt';
-import { generateToken } from '../utils/jwt';
+import { generateToken } from '../utils/jwt.js';
 
 class UserService {
   constructor(userRepository) {

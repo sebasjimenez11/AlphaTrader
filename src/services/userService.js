@@ -1,66 +1,50 @@
 // src/services/userService.js
-import bcrypt from 'bcrypt';
 import { generateToken } from '../utils/jwt.js';
+import generateHash from '../utils/generateHash.js';
+import AppError from '../utils/appError.js';
 
 class UserService {
   constructor(userRepository) {
     this.userRepository = userRepository;
   }
 
-  async registerUser({ email, password, fullName, dateOfBirth, telefono }) {
-    const existingUser = await this.userRepository.findByEmail(email);
+  async registerUser({ Email, Password, FullName, DateOfBirth, Telefono, acceptedTerms }) {
+    const existingUser = await this.userRepository.findByEmail(Email);
     if (existingUser) {
-      return {
-        statusCode: 400,
-        status: false,
-        message: 'El usuario ya existe',
-      };
+      throw new AppError('El usuario ya existe', 400);
     }
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const register = await this.userRepository.create({
-      Email: email,
-      FullName: fullName,
-      DateOfBirth: dateOfBirth,
-      Status: true,
-      Telefono: telefono,
+    const hashedPassword = await generateHash(Password);
+    const user = await this.userRepository.create({
+      Email,
+      FullName,
+      DateOfBirth,
+      Telefono,
       Password: hashedPassword,
+      acceptedTerms,
+      Status: true
     });
-
-    if (!register) {
-      return {
-        statusCode: 400,
-        status: false,
-        message: 'Error al crear el usuario',
-      };
-    } else {
-      return {
-        statusCode: 201,
-        token: generateToken(register),
-        status: true,
-        message: 'Usuario creado con éxito',
-      };
+    if (!user) {
+      throw new AppError('Error al crear el usuario', 400);
     }
-  }
-
-  async findUserById(id) {
-    return await this.userRepository.findById(id);
+    const token = generateToken(user);
+    return { token };
   }
 
   async completeUserProfile(email, { fullName, dateOfBirth }) {
     const user = await this.userRepository.findByEmail(email);
     if (!user) {
-      throw new Error('Usuario no encontrado');
+      throw new AppError('Usuario no encontrado', 404);
     }
     if (user.Status) {
-      throw new Error('El perfil ya está completo');
+      throw new AppError('El perfil ya está completo', 400);
     }
-    user.FullName = fullName;
+
     user.DateOfBirth = dateOfBirth;
+    
     user.Status = true;
     await user.save();
     return user;
   }
-
 }
 
 export default UserService;

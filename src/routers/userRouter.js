@@ -1,21 +1,33 @@
-// routers/authRouter.js
+// src/routes/authRouter.js
 import { Router } from 'express';
 import userRepository from '../repositories/userRepository.js';
 import UserService from '../services/userService.js';
 import UserController from '../controllers/userController.js';
-import { sendEmail } from '../services/integrations/emailService.js';
-import { generateToken } from '../utils/jwt.js';
+import catchAsync from '../utils/catchAsync.js';
+import * as validator from '../middlewares/userValidator.js';
+import validationErrors from '../middlewares/validationResult.js';
+import { verifyToken } from '../utils/jwt.js';
 
 const router = Router();
 
-// Inyección de dependencias: se inyecta el repositorio en el servicio y el servicio en el controlador.
 const userService = new UserService(userRepository);
 const userController = new UserController(userService);
 
-// Registro local
-router.post('/register', userController.register);
+// Registro de usuario
+router.post(
+  '/register',
+  validator.registerValidator(), // Invocación para obtener middlewares de validación
+  validationErrors,
+  catchAsync(userController.register.bind(userController))
+);
 
-
-
+// Completar perfil de usuario
+router.put(
+  '/completeProfile',
+  validator.completeProfileValidator(),
+  validationErrors,
+  verifyToken,
+  catchAsync(userController.completeProfile.bind(userController))
+);
 
 export default router;

@@ -1,7 +1,9 @@
+// src/services/AuthService.js
 import UserDto from "../dto/userDto.js";
 import { generateToken } from "../utils/jwt.js";
 import { getId } from "../utils/uuid.js";
 import bcrypt from "bcrypt";
+import AppError from "../utils/appError.js";
 
 class AuthService {
   constructor(userRepository) {
@@ -11,58 +13,35 @@ class AuthService {
   async login({ Email, Password }) {
     const user = await this.userRepository.findByEmail(Email);
     if (!user || !(await bcrypt.compare(Password, user.Password))) {
-      return {
-        codeStatus: 404,
-        status: false,
-        message: "Usuario o contraseña incorrectos",
-      };
+      throw new AppError("Usuario o contraseña incorrectos", 404);
     }
-    return {
-      codeStatus: 200,
-      status: true,
-      token: generateToken(user),
-      message: "Usuario logueado con éxito",
-    };
+    const token = generateToken(user);
+    return { token, message: "Usuario logueado con éxito" };
   }
 
   async findOrCreateByOAuth(data) {
-    const { email, name } = data; // Extraer email y name correctamente
-  
+    const { email, name } = data;
     let user = await this.userRepository.findByEmail(email);
     if (!user) {
       const newUser = {
         ID: getId(),
         Email: email,
         Name: name,
-        Status: true, // Suponiendo que siempre está activo si se registra
+        Status: true, // Se crea el usuario activo
       };
-  
+
       const userDto = new UserDto(newUser);
       user = await this.userRepository.create(userDto.toJSON());
-  
+
       if (!user) {
-        return {
-          codeStatus: 400,
-          status: false,
-          message: "Error al crear el usuario",
-        };
+        throw new AppError("Error al crear el usuario", 400);
       }
-  
-      return {
-        codeStatus: 201,
-        status: true,
-        token: generateToken(user),
-        message: "Usuario creado con éxito",
-      };
+      const token = generateToken(user);
+      return { user, token, message: "Usuario creado con éxito" };
     }
-  
-    return {
-      codeStatus: 200,
-      status: true,
-      token: generateToken(user),
-      message: "Usuario autenticado con éxito",
-    };
-  }  
+    const token = generateToken(user);
+    return { user, token, message: "Usuario autenticado con éxito" };
+  }
 }
 
 export default AuthService;

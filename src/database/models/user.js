@@ -1,6 +1,6 @@
 // models/User.js
 import { DataTypes } from 'sequelize';
-import sequelize from '../db.js';
+import sequelize from '../../config/db.js';
 
 const User = sequelize.define('User', {
   ID: {
@@ -49,6 +49,10 @@ const User = sequelize.define('User', {
     allowNull: false,
     defaultValue: '',
   },
+  acceptedTerms: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+  }
 });
 
 export default User;

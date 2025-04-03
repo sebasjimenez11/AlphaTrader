@@ -13,7 +13,7 @@ class UserRepository {
     return await User.create(data);
   }
 
-  async updateByEmail(id, data) {
+  async updateById(id, data) {
     return await User.update(data, { where: { ID: id } });
   }
 

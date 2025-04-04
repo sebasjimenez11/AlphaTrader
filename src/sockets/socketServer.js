@@ -15,7 +15,7 @@ class SocketServer {
       console.log(`Cliente conectado: ${socket.id}`);
 
       // Envía la data "stocked" al cliente cuando se conecta
-      await this.sendStockedData(socket);
+      // await this.sendStockedData(socket);
 
       // Registra los eventos específicos del mercado
       marketEvents(socket, this.io);
@@ -31,17 +31,17 @@ class SocketServer {
   }
 
   // Método para obtener y enviar la data "stocked"
-  async sendStockedData(socket) {
-    try {
-      // Supongamos que unifiedMarketDataService tiene un método para obtener
-      // data "stocked" (por ejemplo, un listado inicial de coins o data histórica)
-      const stockedData = await unifiedMarketDataService.getStockedData();
-      socket.emit("stockedData", stockedData);
-    } catch (error) {
-      console.error("Error obteniendo stocked data:", error.message);
-      socket.emit("error", { message: error.message });
-    }
-  }
+  // async sendStockedData(socket) {
+  //   try {
+  //     // Supongamos que unifiedMarketDataService tiene un método para obtener
+  //     // data "stocked" (por ejemplo, un listado inicial de coins o data histórica)
+  //     const stockedData = await unifiedMarketDataService.getStockedData();
+  //     socket.emit("stockedData", stockedData);
+  //   } catch (error) {
+  //     console.error("Error obteniendo stocked data:", error.message);
+  //     socket.emit("error", { message: error.message });
+  //   }
+  // }
 
   // Método para emitir eventos a todos los clientes conectados
   emit(event, data) {

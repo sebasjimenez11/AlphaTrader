@@ -1,10 +1,8 @@
-// src/sockets/events/marketEvents.js
 import marketDataService from "../../services/marketDataService.js";
 
 const handleMainCoinsLiveData = async (socket, data) => {
   try {
-    const result = await marketDataService.getMainCoinsLiveData();
-    // En este caso, result contiene: { mainCoins, lastUpdate, ws }
+    const result = await marketDataService.getMainCoinsLiveData(socket);
     socket.emit("mainCoinsLiveData", result);
   } catch (error) {
     console.error("Error en getMainCoinsLiveData:", error.message);
@@ -14,7 +12,7 @@ const handleMainCoinsLiveData = async (socket, data) => {
 
 const handleSecondaryCoinsLiveData = async (socket, data) => {
   try {
-    const result = await marketDataService.getSecondaryCoinsLiveData();
+    const result = await marketDataService.getSecondaryCoinsLiveData(socket);
     socket.emit("secondaryCoinsLiveData", result);
   } catch (error) {
     console.error("Error en getSecondaryCoinsLiveData:", error.message);

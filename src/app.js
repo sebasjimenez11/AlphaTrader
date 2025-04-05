@@ -1,5 +1,6 @@
 // src/app.js
 import express from "express";
+import cors from 'cors';
 import http from "http";
 import session from "express-session";
 import dotenv from "dotenv";
@@ -19,6 +20,7 @@ import initStockendRouter from "./routers/stockendRouter.js";
 // Inicializar Express
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 // Configuración de Redis para sesiones
 const redisClient = createClient({
@@ -47,6 +49,12 @@ app.use("/user", userRouter);
 
 // Middleware de manejo de errores globales
 app.use(errorHandler);
+
+// Tareas programadas
+import { ejecutarTareaCoins, tareaProgramadaCoins } from "./utils/task.js";
+ejecutarTareaCoins();
+tareaProgramadaCoins.start();
+
 
 // Crear servidor HTTP (necesario para Socket.io)
 const server = http.createServer(app);

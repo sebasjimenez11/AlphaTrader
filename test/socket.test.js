@@ -7,8 +7,8 @@ socket.on("connect", () => {
   console.log("Conectado al servidor con ID:", socket.id);
 
   // Solicitar principales criptomonedas en vivo
-  socket.emit("getMainCoinsLiveData");
-
+  // socket.emit("getMainCoinsLiveData");
+// 
   // Solicitar monedas secundarias en vivo
   // socket.emit("getSecondaryCoinsLiveData");
 
@@ -16,7 +16,7 @@ socket.on("connect", () => {
   // socket.emit("getCryptoDetailWithHistory", { cryptoId: "bitcoin", interval: "1d", historyRange: "30d" });
 
   // Solicitar datos de conversión
-  // socket.emit("getConversionData", { cryptoId: "bitcoin", fiatCurrency: "USD", amountCrypto: 1 });
+  socket.emit("getConversionData", { cryptoId: "bitcoin", fiatCurrency: "USD", amountCrypto: 1 });
 });
 
 socket.on("mainCoinsLiveData", (data) => {
@@ -32,6 +32,14 @@ socket.on("cryptoDetailWithHistory", (data) => {
 });
 
 socket.on("conversionData", (data) => {
+  console.log("Datos de conversión:", data);
+});
+
+socket.on("secondaryCoinsLiveUpdate", (data) => {
+  console.log("Datos de conversión:", data);
+});
+
+socket.on("mainCoinsLiveUpdate", (data) => {
   console.log("Datos de conversión:", data);
 });
 

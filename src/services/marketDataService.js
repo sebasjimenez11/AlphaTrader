@@ -25,7 +25,7 @@ class MarketDataService {
             this.marketDataRepo.eventEmitter.on("marketDataUpdate", updateListener);
 
             // Establecer la conexión WebSocket
-            const ws = this.marketDataRepo.subscribeToMarketUpdates(symbols);
+            const ws = this.marketDataRepo.subscribeToMultipleMarketUpdates(symbols);
 
             // Al desconectar el socket, remover el listener y cerrar el WebSocket
             socket.on("disconnect", () => {
@@ -54,7 +54,7 @@ class MarketDataService {
             };
 
             this.marketDataRepo.eventEmitter.on("marketDataUpdate", updateListener);
-            const ws = this.marketDataRepo.subscribeToMarketUpdates(symbols);
+            const ws = this.marketDataRepo.subscribeToMultipleMarketUpdates(symbols);
 
             socket.on("disconnect", () => {
                 this.marketDataRepo.eventEmitter.removeListener("marketDataUpdate", updateListener);

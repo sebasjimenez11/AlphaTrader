@@ -1,8 +1,9 @@
 import axios from "axios";
 import WebSocket from "ws";
 import AppError from "../utils/appError.js";
+import throttle from 'lodash/throttle.js';
 import EventEmitter from "events";
-import { log } from "console";
+import { formatLiveUpdate } from "../utils/coinDataFormatter.js";
 
 class MarketDataRepository {
   constructor(redisRepository) {
@@ -113,35 +114,89 @@ class MarketDataRepository {
   // Métodos para Actualizaciones en Vivo
   // -------------------------------
   /**
-   * Se suscribe a actualizaciones en tiempo real desde Binance usando WebSocket.
-   * Los datos en vivo se almacenan en Redis y se emiten mediante el EventEmitter.
+   * Se suscribe a actualizaciones en tiempo real desde Binance para múltiples símbolos.
+   * Los datos se almacenan en Redis y se emiten como arreglo con todos los símbolos.
    *
    * @param {string[]} symbols - Lista de símbolos (ej. ["BTCUSDT", "ETHUSDT"])
    * @returns {WebSocket} - La instancia del WebSocket.
    */
-  subscribeToMarketUpdates(symbols) {
+  subscribeToMultipleMarketUpdates(symbols) {
     try {
-      const streams = symbols.map(s => `${s.toLowerCase()}@ticker`).join("/");
+      const streams = symbols.map(s => `${s.toLowerCase()}@miniTicker`).join("/");
       const ws = new WebSocket(`${this.binanceWsUrl}/stream?streams=${streams}`);
+      const marketData = {};
 
-      ws.on("open", () => console.log("Conectado a Binance WebSocket"));
-      ws.on("message", async (data) => {
+      ws.on("open", () => console.log("Conectado a Binance WebSocket [Múltiples]"));
+
+      // Función de procesamiento con throttling: 200ms = 5 mensajes/segundo
+      const processMessageThrottled = throttle(async (data) => {
         try {
           const parsed = JSON.parse(data);
-          const coinData = parsed.data;
-          // Cachea la actualización en Redis con un TTL corto (ej. 60 segundos)
-          await this.redisRepository.set(`marketData:realtime:${coinData.s}`, coinData, 60);
-          // Emite el evento de actualización a través del EventEmitter
-          this.eventEmitter.emit("marketDataUpdate", coinData);
+          const coinDataRaw = parsed.data;
+          const coinData = formatLiveUpdate(coinDataRaw);
+          marketData[coinDataRaw.s] = coinData;
+
+          await this.redisRepository.set(`marketData:realtime:${coinDataRaw.s}`, coinData, 60);
+          this.eventEmitter.emit("marketDataUpdate", Object.values(marketData));
         } catch (err) {
           console.error("Error procesando mensaje:", err);
         }
+      }, 200);
+
+      ws.on("message", (data) => {
+        processMessageThrottled(data);
       });
+
       ws.on("error", (err) => {
         console.error("Error en WebSocket:", err);
         throw new AppError(err.message, 500);
       });
-      ws.on("close", () => console.log("WebSocket cerrado"));
+
+      ws.on("close", () => console.log("WebSocket cerrado [Múltiples]"));
+
+      return ws;
+    } catch (error) {
+      throw new AppError(error.message, 505);
+    }
+  }
+
+  /**
+   * Se suscribe a actualizaciones en tiempo real desde Binance para un solo símbolo.
+   * Los datos se almacenan en Redis y se emiten como un solo objeto.
+   *
+   * @param {string} symbol - El símbolo (ej. "BTCUSDT")
+   * @returns {WebSocket} - La instancia del WebSocket.
+   */
+  async subscribeToSingleMarketUpdate(symbol) {
+    try {
+      const ws = new WebSocket(`${this.binanceWsUrl}/ws/${symbol.toLowerCase()}@miniTicker`);
+
+      ws.on("open", () => console.log(`Conectado a Binance WebSocket [${symbol}]`));
+
+      // Aplicamos throttling para procesar a lo sumo 5 mensajes por segundo
+      const processMessageThrottled = throttle(async (data) => {
+        try {
+          const coinDataRaw = JSON.parse(data);
+          const coinData = formatLiveUpdate(coinDataRaw);
+
+          await this.redisRepository.set(`marketData:realtime:${symbol}`, coinData, 60);
+          this.eventEmitter.emit("marketDataUpdate", coinData);
+        } catch (err) {
+          console.error("Error procesando mensaje:", err);
+        }
+      }, 200);
+
+      ws.on("message", (data) => {
+        processMessageThrottled(data);
+      });
+
+      ws.on("error", (err) => {
+        console.error("Error en WebSocket:", err);
+        throw new AppError(err.message, 500);
+      });
+
+      ws.on("close", () => console.log(`WebSocket cerrado [${symbol}]`));
+
       return ws;
     } catch (error) {
       throw new AppError(error.message, 505);

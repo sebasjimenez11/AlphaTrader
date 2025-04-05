@@ -1,5 +1,6 @@
 // src/app.js
 import express from "express";
+import cors from "cors";
 import http from "http";
 import session from "express-session";
 import dotenv from "dotenv";
@@ -18,6 +19,11 @@ import initStockendRouter from "./routers/stockendRouter.js";
 
 // Inicializar Express
 const app = express();
+app.use(cors({
+  origin: "*", 
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 app.use(express.json());
 
 // Configuración de Redis para sesiones

@@ -26,12 +26,15 @@ class MarketDataService {
 
             // Establecer la conexión WebSocket
             const ws = this.marketDataRepo.subscribeToMultipleMarketUpdates(symbols);
-
             // Al desconectar el socket, remover el listener y cerrar el WebSocket
             socket.on("disconnect", () => {
                 this.marketDataRepo.eventEmitter.removeListener("marketDataUpdate", updateListener);
-                ws.close();
-                console.log(`Socket desconectado y WebSocket cerrado: ${socket.id}`);
+                if (ws && ws.readyState === ws.OPEN) {  // ✅ Solo cerrar si está realmente abierto
+                    ws.close();
+                    console.log(`WebSocket cerrado correctamente: ${socket.id}`);
+                } else {
+                    console.warn(`Intento de cerrar WebSocket no establecido: ${socket.id}`);
+                }
             });
 
             return { mainCoins };
@@ -46,9 +49,9 @@ class MarketDataService {
             const allCoins = await this.coingeckoRepo.coinsList();
             const ranking = await this.coingeckoRepo.coinsRanking();
             const rankingIds = ranking.map(c => c.id);
-            const secondaryCoins = allCoins.filter(coin => !rankingIds.includes(coin.id));
-            const symbols = secondaryCoins.map(coin => coin.symbol.toUpperCase() + "USDT");
+            const secondaryCoins = allCoins.filter(coin => !rankingIds.includes(coin.id)).slice(29, 46);
 
+            const symbols = secondaryCoins.map(coin => coin.symbolo + "USDT");
             const updateListener = (coinData) => {
                 socket.emit("secondaryCoinsLiveUpdate", coinData);
             };
@@ -58,8 +61,12 @@ class MarketDataService {
 
             socket.on("disconnect", () => {
                 this.marketDataRepo.eventEmitter.removeListener("marketDataUpdate", updateListener);
-                ws.close();
-                console.log(`Socket desconectado y WebSocket cerrado: ${socket.id}`);
+                if (ws && ws.readyState === ws.OPEN) {  // ✅ Solo cerrar si está realmente abierto
+                    ws.close();
+                    console.log(`WebSocket cerrado correctamente: ${socket.id}`);
+                } else {
+                    console.warn(`Intento de cerrar WebSocket no establecido: ${socket.id}`);
+                }
             });
 
             return { secondaryCoins };
@@ -72,7 +79,7 @@ class MarketDataService {
     async getCryptoDetailWithHistory(cryptoId, { interval = "1d", historyRange = "30d" } = {}) {
         try {
             const coinDetail = await this.coingeckoRepo.coinById(cryptoId);
-            const historicalData = await this.marketDataRepo.getHistoricalData(coinDetail.binance_symbol , interval);
+            const historicalData = await this.marketDataRepo.getHistoricalData(coinDetail.binance_symbol, interval);
             return { coinDetail, historicalData };
         } catch (error) {
             throw new AppError(error.message, 505);

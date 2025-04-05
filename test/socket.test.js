@@ -1,7 +1,11 @@
 // test/socketClientTest.js
 import { io } from "socket.io-client";
 
-// const socket = io("https://alphatrader.onrender.com");
+// const socket = io("https://alphatrader-9t1b.onrender.com", {
+//   reconnectionAttempts: 5, // Número de intentos de reconexión
+//   timeout: 20000, // Tiempo de espera antes de considerar que la conexión ha fallado
+// });
+
 const socket = io("http://localhost:10101");
 
 
@@ -12,7 +16,7 @@ socket.on("connect", () => {
   socket.emit("getMainCoinsLiveData");
 
   // Solicitar monedas secundarias en vivo
-  // socket.emit("getSecondaryCoinsLiveData");
+  socket.emit("getSecondaryCoinsLiveData");
 
   // Solicitar detalle de una crypto con historial
   // socket.emit("getCryptoDetailWithHistory", { cryptoId: "bitcoin", interval: "1d", historyRange: "30d" });
@@ -38,7 +42,7 @@ socket.on("conversionData", (data) => {
 });
 
 socket.on("secondaryCoinsLiveUpdate", (data) => {
-  console.log("Datos de conversión:", data);
+  console.log("Datos de conversión 2:", data);
 });
 
 socket.on("mainCoinsLiveUpdate", (data) => {

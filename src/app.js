@@ -1,6 +1,6 @@
 // src/app.js
 import express from "express";
-import cors from 'cors';
+import cors from "cors";
 import http from "http";
 import session from "express-session";
 import dotenv from "dotenv";
@@ -15,17 +15,23 @@ import authRouter from "./routers/authRouter.js";
 import userRouter from "./routers/userRouter.js";
 import sequelize from "./config/db.js";
 import errorHandler from "./middlewares/errorHandler.js";
-import initStockendRouter from "./routers/stockendRouter.js";
-
 // Inicializar Express
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: "*", 
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 
 // Configuración de Redis para sesiones
 const redisClient = createClient({
   legacyMode: true,
-  url: process.env.REDIS_URL || "redis://localhost:6379",
+  url: process.env.REDIS_URL, // Asegúrate de que esta variable contenga la cadena de conexión de Azure
+  socket: {
+    tls: true, // Habilita TLS para conexiones seguras
+    rejectUnauthorized: false, // Ajusta este valor según tus requerimientos de seguridad
+  },
 });
 redisClient.connect().catch(console.error);
 
@@ -74,4 +80,6 @@ sequelize.sync({ alter: true }).then(() => {
 server.listen(process.env.PORT || 3000, () => {
     console.log(`🚀 Servidor corriendo en puerto ${process.env.PORT || 3000}`);
   });
+}).catch((error) => {
+  console.error("Error al sincronizar la base de datos:", error.message);
 });

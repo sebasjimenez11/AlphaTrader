@@ -172,13 +172,6 @@ class CoingeckoRepository {
         return rankingCoins;
       }
 
-      // Usamos la lista de Binance de Redis (asegúrate de guardarla correctamente)
-      const binanceCoins = await this.redisRepository.get('binanceCoins');
-      if (!binanceCoins || binanceCoins.length === 0) {
-        throw new AppError('No se encontraron monedas de Binance', 404);
-      }
-      const binanceCoinsSet = new Set(binanceCoins);
-
       // Consultamos CoinGecko para obtener datos de mercado (ejemplo, top 50)
       const response = await axios.get(`${this.baseUrl}/coins/markets`, {
         params: {
@@ -192,8 +185,7 @@ class CoingeckoRepository {
 
       const coins = response.data || [];
       const filteredCoins = coins
-        .filter(coin => binanceCoinsSet.has(coin.id))
-        .slice(0, 10)
+        .slice(0, 20)
         .map(coin => ({
           id: coin.id,
           symbol: coin.symbol,
@@ -300,14 +292,16 @@ class CoingeckoRepository {
 
   async convertirCryptoAmoneda(cryptoId, fiatCurrency, cantidadCrypto) {
     try {
+      const moneda = fiatCurrency.toLowerCase();
       const response = await axios.get(`${this.baseUrl}/simple/price`, {
         params: {
           ids: cryptoId,
-          vs_currencies: fiatCurrency.toLowerCase()
+          vs_currencies: moneda
         }
       });
-      const precio = response.data[cryptoId][fiatCurrency];
+      const precio = response.data[cryptoId][moneda];
       const resultado = cantidadCrypto * precio;
+      
       if (isNaN(resultado)) {
         throw new AppError('Recurso no encontrado', 404);
       }

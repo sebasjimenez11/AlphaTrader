@@ -1,7 +1,9 @@
 // test/socketClientTest.js
 import { io } from "socket.io-client";
 
+// const socket = io("https://alphatrader.onrender.com");
 const socket = io("http://localhost:10101");
+
 
 socket.on("connect", () => {
   console.log("Conectado al servidor con ID:", socket.id);
@@ -40,7 +42,7 @@ socket.on("secondaryCoinsLiveUpdate", (data) => {
 });
 
 socket.on("mainCoinsLiveUpdate", (data) => {
-  console.log("Datos de conversión:", data);
+  console.log("Datos de conversión 1:", data);
 });
 
 socket.on("error", (error) => {

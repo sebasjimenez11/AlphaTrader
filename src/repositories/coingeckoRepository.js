@@ -1,6 +1,6 @@
 import axios from "axios";
 import AppError from "../utils/appError.js";
-
+import { formatCoinData, arrayToObjectByKey } from "../utils/coinDataFormatter.js";
 class CoingeckoRepository {
   constructor(redisRepository) {
     this.redisRepository = redisRepository;
@@ -74,23 +74,25 @@ class CoingeckoRepository {
     try {
       const response = await axios.get('https://api.binance.com/api/v3/exchangeInfo');
       const symbols = response.data.symbols;
-      // Extraemos el baseAsset (normalizado a minúsculas)
       const assets = Array.from(new Set(symbols.map(item => item.baseAsset.toLowerCase())));
-      // Mapeamos a un objeto básico (sin datos de mercado)
-      return assets.map(asset => ({
-        id: asset,
-        symbol: asset,
-        name: asset.toUpperCase(),
-        image: null,
-        market_cap: null,
-        market_cap_rank: null,
-        current_price: null,
-        total_volume: null,
-        high_24h: null,
-        low_24h: null,
-        price_change_percentage_24h: null,
-        binance_symbol: (asset + 'tusd').toLowerCase(),
-      }));
+      const list = assets.map(asset => {
+        const coin = {
+          id: asset,
+          symbol: asset,
+          name: asset.toUpperCase(),
+          image: null,
+          market_cap: null,
+          market_cap_rank: null,
+          current_price: null,
+          total_volume: null,
+          high_24h: null,
+          low_24h: null,
+          price_change_percentage_24h: null,
+          binance_symbol: (asset + "TUSD").toUpperCase()
+        };
+        return formatCoinData(coin);
+      });
+      return list;
     } catch (error) {
       throw new AppError(`Error al obtener coins de Binance: ${error.message}`, 505);
     }
@@ -99,27 +101,35 @@ class CoingeckoRepository {
   /**
    * Obtiene la lista de monedas desde CryptoCompare.
    */
-  async getCoinListFromCryptoCompare() {
+  async coinsRanking() {
     try {
-      const response = await axios.get('https://min-api.cryptocompare.com/data/all/coinlist');
-      const data = response.data.Data;
-      const coins = Object.values(data);
-      return coins.map(coin => ({
-        id: coin.Id ? coin.Id.toLowerCase() : coin.Symbol.toLowerCase(),
-        symbol: coin.Symbol.toLowerCase(),
-        name: coin.CoinName,
-        image: coin.ImageUrl ? 'https://www.cryptocompare.com' + coin.ImageUrl : null,
-        market_cap: null,
-        market_cap_rank: null,
-        current_price: null,
-        total_volume: null,
-        high_24h: null,
-        low_24h: null,
-        price_change_percentage_24h: null,
-        binance_symbol: (coin.Symbol.toLowerCase() + 'tusd').toLowerCase(),
-      }));
-    } catch (error) {
-      throw new AppError(`Error al obtener coins de CryptoCompare: ${error.message}`, 505);
+      let rankingCoins = await this.redisRepository.get('coinsRanking');
+      if (rankingCoins && typeof rankingCoins === "object" && Object.keys(rankingCoins).length > 0) {
+        return rankingCoins;
+      }
+
+      const response = await axios.get(`${this.baseUrl}/coins/markets`, {
+        params: {
+          vs_currency: 'usd',
+          order: 'market_cap_desc',
+          per_page: 50,
+          page: 1,
+          sparkline: false,
+        },
+      });
+
+      const coins = response.data || [];
+      const filteredCoins = coins.slice(0, 20).map(coin => {
+        // Se asegura de formar el símbolo de Binance en mayúsculas
+        coin.binance_symbol = (coin.symbol + "TUSD").toUpperCase();
+        return formatCoinData(coin);
+      });
+
+      const finalRanking = arrayToObjectByKey(filteredCoins);
+      await this.redisRepository.set('coinsRanking', finalRanking, 60);
+      return finalRanking;
+    } catch (e) {
+      throw new AppError(`Error al obtener el ranking de monedas: ${e.message}`, 505);
     }
   }
 
@@ -130,30 +140,29 @@ class CoingeckoRepository {
   async coinsList() {
     try {
       let coins = await this.redisRepository.get('coinsList');
-      if (coins && coins.length >= 250) {
+      if (coins && typeof coins === "object" && Object.keys(coins).length >= 250) {
         return coins;
       }
 
-      // Ejecutar en paralelo las 3 fuentes
       const results = await Promise.allSettled([
         this.getCoinListFromCoinGecko(),
-        this.getCoinListFromBinance(),
-        this.getCoinListFromCryptoCompare()
+        this.getCoinListFromBinance()
       ]);
 
-      // Unir resultados en un Map para eliminar duplicados (usando id como clave)
       const unionMap = new Map();
       for (const result of results) {
         if (result.status === 'fulfilled' && result.value) {
-          for (const coin of result.value) {
-            // Si ya existe, puedes actualizar o mantener el que tenga más datos, según convenga
-            unionMap.set(coin.id, coin);
-          }
+          // result.value es un arreglo; recorremos y formateamos
+          result.value.forEach(coin => {
+            // Normalizamos el símbolo de Binance
+            coin.binance_symbol = coin.binance_symbol
+              ? coin.binance_symbol.toUpperCase()
+              : (coin.symbol ? (coin.symbol + "TUSD").toUpperCase() : null);
+            unionMap.set(coin.id, formatCoinData(coin));
+          });
         }
       }
-      const finalList = Array.from(unionMap.values());
-
-      // Guardar en Redis la lista unificada por 300 segundos (5 minutos)
+      const finalList = arrayToObjectByKey(Array.from(unionMap.values()));
       await this.redisRepository.set('coinsList', finalList, 300);
       return finalList;
     } catch (e) {
@@ -215,13 +224,14 @@ class CoingeckoRepository {
   async coinById(coinId) {
     try {
       const coinsList = await this.redisRepository.get('coinsList');
-      if (coinsList && coinsList.length > 0) {
-        const coinFound = coinsList.find(coin =>
-          coin.id.toLowerCase() === coinId.toLowerCase()
-        );
-        if (coinFound) return coinFound;
+      if (coinsList && Object.keys(coinsList).length > 0) {
+        // Como coinsList es ahora un objeto de objetos, se itera para encontrar la coin
+        for (const key in coinsList) {
+          if (coinsList[key].Id.toLowerCase() === coinId.toLowerCase()) {
+            return coinsList[key];
+          }
+        }
       }
-
       const response = await axios.get(`${this.baseUrl}/coins/${coinId}`, {
         params: {
           localization: false,
@@ -233,19 +243,9 @@ class CoingeckoRepository {
         },
       });
       const coin = response.data;
-      return {
-        id: coin.id,
-        symbol: coin.symbol,
-        name: coin.name,
-        image: coin.image?.large,
-        market_cap: coin.market_data?.market_cap?.usd,
-        market_cap_rank: coin.market_cap_rank,
-        current_price: coin.market_data?.current_price?.usd,
-        total_volume: coin.market_data?.total_volume?.usd,
-        high_24h: coin.market_data?.high_24h?.usd,
-        low_24h: coin.market_data?.low_24h?.usd,
-        price_change_percentage_24h: coin.market_data?.price_change_percentage_24h,
-      };
+      // Aseguramos el símbolo de Binance
+      coin.binance_symbol = (coin.symbol + "TUSD").toUpperCase();
+      return formatCoinData(coin);
     } catch (e) {
       throw new AppError(e.message, 505);
     }
@@ -257,20 +257,23 @@ class CoingeckoRepository {
   async coinsBySymbol(symbol) {
     try {
       const coinsList = await this.redisRepository.get('coinsList');
-      if (coinsList && coinsList.length > 0) {
-        return coinsList.filter(coin =>
-          coin.symbol.toLowerCase().includes(symbol.toLowerCase())
+      let filtered;
+      if (coinsList && Object.keys(coinsList).length > 0) {
+        filtered = Object.values(coinsList).filter(coin =>
+          coin.symbolo.toLowerCase().includes(symbol.toLowerCase())
         );
       } else {
         const allCoins = await this.coinsList();
-        return allCoins.filter(coin =>
-          coin.symbol.toLowerCase().includes(symbol.toLowerCase())
+        filtered = Object.values(allCoins).filter(coin =>
+          coin.symbolo.toLowerCase().includes(symbol.toLowerCase())
         );
       }
+      return arrayToObjectByKey(filtered);
     } catch (e) {
       throw new AppError(e.message, 505);
     }
   }
+
 
   async getAllForeignExchange() {
     try {
@@ -301,7 +304,7 @@ class CoingeckoRepository {
       });
       const precio = response.data[cryptoId][moneda];
       const resultado = cantidadCrypto * precio;
-      
+
       if (isNaN(resultado)) {
         throw new AppError('Recurso no encontrado', 404);
       }

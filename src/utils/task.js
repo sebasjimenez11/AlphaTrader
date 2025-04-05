@@ -27,3 +27,32 @@ export const tareaProgramadaCoins = cron.schedule('0 * * * *', async () => {
     console.error(`[CRON] Error en tarea programada: ${error.message}`);
   }
 });
+
+
+/**
+ * Función que configura una tarea programada para enviar un PING a Redis.
+ * @param {Object} redisClient - Cliente de Redis ya inicializado y conectado.
+ * @param {string} schedule - Expresión cron que define la frecuencia de ejecución.
+ */
+export function iniciarTareaPingRedis(redisClient, schedule = '* * * * *') {
+  // Verifica que el cliente de Redis esté conectado
+  if (!redisClient.isOpen) {
+    console.error('El cliente de Redis no está conectado.');
+    return;
+  }
+
+  // Programa la tarea utilizando la expresión cron proporcionada
+  const tarea = cron.schedule(schedule, async () => {
+    try {
+      await redisClient.ping();
+      console.log('Ping a Redis exitoso');
+    } catch (err) {
+      console.error('Error en ping de Redis:', err);
+    }
+  });
+
+  console.log('Tarea programada para enviar PING a Redis iniciada.');
+
+  // Retorna la tarea por si se necesita detenerla o manipularla posteriormente
+  return tarea;
+}

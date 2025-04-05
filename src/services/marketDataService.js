@@ -1,4 +1,3 @@
-// src/services/unifiedMarketDataService.js
 import MarketDataRepository from "../repositories/marketDataRepository.js";
 import CoingeckoRepository from "../repositories/coingeckoRepository.js";
 import RedisRepository from "../repositories/redisRepository.js";
@@ -11,32 +10,38 @@ class MarketDataService {
         this.coingeckoRepo = new CoingeckoRepository(this.redisRepository);
     }
 
-    // En unifiedMarketDataService.js
-    async getMainCoinsLiveData() {
+    // 1. Obtener datos en vivo de las monedas principales
+    async getMainCoinsLiveData(socket) {
         try {
             const mainCoins = await this.coingeckoRepo.coinsRanking();
-            const symbols = mainCoins.map(coin => coin.symbol + "USDT"); // Ejemplo para Binance
+            const symbols = mainCoins.map(coin => coin.symbol + "USDT");
 
-            // Variable para almacenar la última actualización
-            let lastUpdate = null;
+            // Definir listener para recibir actualizaciones del EventEmitter
+            const updateListener = (coinData) => {
+                socket.emit("mainCoinsLiveUpdate", coinData);
+            };
 
-            // Se suscribe a las actualizaciones en vivo
-            const ws = this.marketDataRepo.subscribeToMarketUpdates(symbols, (data) => {
-                lastUpdate = data; // Actualiza la variable con el último dato recibido
-                // Puedes hacer algo adicional aquí, por ejemplo emitir un evento interno
-                // console.log("Actualización en vivo:", data);
+            // Suscribirse al evento de actualización
+            this.marketDataRepo.eventEmitter.on("marketDataUpdate", updateListener);
+
+            // Establecer la conexión WebSocket
+            const ws = this.marketDataRepo.subscribeToMarketUpdates(symbols);
+
+            // Al desconectar el socket, remover el listener y cerrar el WebSocket
+            socket.on("disconnect", () => {
+                this.marketDataRepo.eventEmitter.removeListener("marketDataUpdate", updateListener);
+                ws.close();
+                console.log(`Socket desconectado y WebSocket cerrado: ${socket.id}`);
             });
 
-            // Retorna la lista de coins, la última actualización (inicialmente null) y la instancia del WebSocket
-            return { mainCoins, lastUpdate, ws };
+            return { mainCoins };
         } catch (error) {
             throw new AppError(error.message, 505);
         }
     }
 
-
     // 2. Obtener listado de monedas secundarias
-    async getSecondaryCoinsLiveData() {
+    async getSecondaryCoinsLiveData(socket) {
         try {
             const allCoins = await this.coingeckoRepo.coinsList();
             const ranking = await this.coingeckoRepo.coinsRanking();
@@ -44,13 +49,20 @@ class MarketDataService {
             const secondaryCoins = allCoins.filter(coin => !rankingIds.includes(coin.id));
             const symbols = secondaryCoins.map(coin => coin.symbol.toUpperCase() + "USDT");
 
-            let lastUpdate = null;
-            const ws = this.marketDataRepo.subscribeToMarketUpdates(symbols, (data) => {
-                lastUpdate = data;
-                // console.log("Actualización de monedas secundarias:", data);
+            const updateListener = (coinData) => {
+                socket.emit("secondaryCoinsLiveUpdate", coinData);
+            };
+
+            this.marketDataRepo.eventEmitter.on("marketDataUpdate", updateListener);
+            const ws = this.marketDataRepo.subscribeToMarketUpdates(symbols);
+
+            socket.on("disconnect", () => {
+                this.marketDataRepo.eventEmitter.removeListener("marketDataUpdate", updateListener);
+                ws.close();
+                console.log(`Socket desconectado y WebSocket cerrado: ${socket.id}`);
             });
 
-            return { secondaryCoins, lastUpdate, ws };
+            return { secondaryCoins };
         } catch (error) {
             throw new AppError(error.message, 505);
         }
@@ -59,10 +71,8 @@ class MarketDataService {
     // 3. Obtener detalle de una crypto con historial
     async getCryptoDetailWithHistory(cryptoId, { interval = "1d", historyRange = "30d" } = {}) {
         try {
-            // Detalle de la coin
             const coinDetail = await this.coingeckoRepo.coinById(cryptoId);
-            // Obtener datos históricos (puedes ajustar parámetros según historyRange)
-            const historicalData = await this.marketDataRepo.getHistoricalData(coinDetail.symbol, interval, { source: "both" });
+            const historicalData = await this.marketDataRepo.getHistoricalData(coinDetail.binance_symbol , interval);
             return { coinDetail, historicalData };
         } catch (error) {
             throw new AppError(error.message, 505);
@@ -72,7 +82,6 @@ class MarketDataService {
     // 4. Obtener datos de conversión para una crypto
     async getConversionData(cryptoId, fiatCurrency = "USD", amountCrypto = 1) {
         try {
-            // Usando MarketDataRepository para conversión
             const conversion = await this.coingeckoRepo.convertirCryptoAmoneda(cryptoId, fiatCurrency, amountCrypto);
             return { cryptoId, fiatCurrency, amountConverted: conversion };
         } catch (error) {

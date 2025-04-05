@@ -15,8 +15,6 @@ import authRouter from "./routers/authRouter.js";
 import userRouter from "./routers/userRouter.js";
 import sequelize from "./config/db.js";
 import errorHandler from "./middlewares/errorHandler.js";
-import initStockendRouter from "./routers/stockendRouter.js";
-
 // Inicializar Express
 const app = express();
 app.use(cors({
@@ -25,11 +23,20 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 app.use(express.json());
+app.use(cors({
+  origin: "*", 
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 
 // Configuración de Redis para sesiones
 const redisClient = createClient({
   legacyMode: true,
-  url: process.env.REDIS_URL || "redis://localhost:6379",
+  url: process.env.REDIS_URL, // Asegúrate de que esta variable contenga la cadena de conexión de Azure
+  socket: {
+    tls: true, // Habilita TLS para conexiones seguras
+    rejectUnauthorized: false, // Ajusta este valor según tus requerimientos de seguridad
+  },
 });
 redisClient.connect().catch(console.error);
 
@@ -54,6 +61,12 @@ app.use("/user", userRouter);
 // Middleware de manejo de errores globales
 app.use(errorHandler);
 
+// Tareas programadas
+import { ejecutarTareaCoins, tareaProgramadaCoins } from "./utils/task.js";
+ejecutarTareaCoins();
+tareaProgramadaCoins.start();
+
+
 // Crear servidor HTTP (necesario para Socket.io)
 const server = http.createServer(app);
 
@@ -72,4 +85,6 @@ sequelize.sync({ alter: true }).then(() => {
 server.listen(process.env.PORT || 3000, () => {
     console.log(`🚀 Servidor corriendo en puerto ${process.env.PORT || 3000}`);
   });
+}).catch((error) => {
+  console.error("Error al sincronizar la base de datos:", error.message);
 });

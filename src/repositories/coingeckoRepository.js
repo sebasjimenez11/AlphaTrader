@@ -4,90 +4,53 @@ import AppError from "../utils/appError.js";
 class CoingeckoRepository {
   constructor(redisRepository) {
     this.redisRepository = redisRepository;
-    // URL base de la API de CoinGecko
-    this.baseUrl = process.env.BASE_URL_COINGECKO;
+    this.baseUrl = process.env.BASE_URL_COINGECKO; // Ejemplo: "https://api.coingecko.com/api/v3"
   }
 
-  /**
-   * Obtiene la lista completa de coins (datos de mercado relevantes)
-   * La lista se cachea en Redis por 5 minutos (300 segundos)
-   */
-  async coinsList() {
+  // Helper: esperar ms milisegundos
+  sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+
+  async getBinanceCoins() {
     try {
-      let coins = await this.redisRepository.get('coinsList');
-      if (coins && coins.length > 0) {
-        return coins;
+      // Intentar obtener desde Redis
+      let binanceCoins = await this.redisRepository.get('binanceCoins');
+      if (binanceCoins && binanceCoins.length > 0) {
+        return new Set(binanceCoins);
       }
 
-      const listCoins = [];
-      let page = 1;
-      let responseCoins = [];
+      // Utilizamos el endpoint de Binance para obtener la información de intercambio
+      const response = await axios.get('https://api.binance.com/api/v3/exchangeInfo');
+      const symbols = response.data.symbols;
+      // Extraemos el campo baseAsset de cada par y lo convertimos a minúsculas para normalizar
+      binanceCoins = new Set(symbols.map(item => item.baseAsset.toLowerCase()));
 
-      do {
-        const response = await axios.get(`${this.baseUrl}/coins/markets`, {
-          params: {
-            vs_currency: 'usd',
-            order: 'market_cap_desc',
-            per_page: 250,
-            page: page,
-            sparkline: false,
-          },
-        });
-        responseCoins = response.data;
-
-        if (responseCoins.length > 0) {
-          listCoins.push(
-            ...responseCoins.map(coin => ({
-              id: coin.id,
-              symbol: coin.symbol,
-              name: coin.name,
-              image: coin.image,
-              market_cap: coin.market_cap,
-              market_cap_rank: coin.market_cap_rank,
-              current_price: coin.current_price,
-              total_volume: coin.total_volume,
-              high_24h: coin.high_24h,
-              low_24h: coin.low_24h,
-              price_change_percentage_24h: coin.price_change_percentage_24h,
-            }))
-          );
-        }
-        page++;
-      } while (responseCoins.length !== 0);
-
-      // Guardar en Redis con TTL de 300 segundos
-      await this.redisRepository.set('coinsList', listCoins, 300);
-      return listCoins;
+      // Guardamos la lista en Redis (como array) con un TTL de 1 hora (3600 segundos)
+      await this.redisRepository.set('binanceCoins', Array.from(binanceCoins), 3600);
+      return binanceCoins;
     } catch (e) {
-      throw new AppError(e.message, 505);
+      throw new AppError(`Error al obtener monedas de Binance: ${e.message}`, 505);
     }
   }
 
-  /**
-   * Obtiene el ranking de coins (top 10 por capitalización)
-   * La data se cachea en Redis por 60 segundos
-   */
-  async coinsRanking() {
-    try {
-      let rankingCoins = await this.redisRepository.get('coinsRanking');
-      if (rankingCoins && rankingCoins.length > 0) {
-        return rankingCoins;
-      }
 
+  /**
+   * Obtiene la lista de monedas desde CoinGecko (market data) para la página 1.
+   */
+  async getCoinListFromCoinGecko() {
+    try {
       const response = await axios.get(`${this.baseUrl}/coins/markets`, {
         params: {
           vs_currency: 'usd',
           order: 'market_cap_desc',
-          per_page: 10,
+          per_page: 250,
           page: 1,
           sparkline: false,
         },
       });
-
-      const coins = response.data || [];
-      rankingCoins = coins.map(coin => ({
+      return response.data.map(coin => ({
         id: coin.id,
-        symbol: coin.symbol,
+        symbol: coin.symbol.toLowerCase(),
         name: coin.name,
         image: coin.image,
         market_cap: coin.market_cap,
@@ -97,23 +60,160 @@ class CoingeckoRepository {
         high_24h: coin.high_24h,
         low_24h: coin.low_24h,
         price_change_percentage_24h: coin.price_change_percentage_24h,
+        binance_symbol: (coin.symbol + 'tusd').toLowerCase(),
       }));
-
-      // Guardar el ranking en Redis con TTL de 60 segundos
-      await this.redisRepository.set('coinsRanking', rankingCoins, 60);
-      return rankingCoins;
-    } catch (e) {
-      throw new AppError(e.message, 505);
+    } catch (error) {
+      throw new AppError(`Error al obtener coins de CoinGecko: ${error.message}`, 505);
     }
   }
 
   /**
-   * Consulta una coin individual utilizando su ID.
-   * Si no se encuentra en la lista cacheada, realiza la consulta a la API.
+   * Obtiene la lista de monedas disponibles en Binance utilizando la API oficial de Binance.
+   */
+  async getCoinListFromBinance() {
+    try {
+      const response = await axios.get('https://api.binance.com/api/v3/exchangeInfo');
+      const symbols = response.data.symbols;
+      // Extraemos el baseAsset (normalizado a minúsculas)
+      const assets = Array.from(new Set(symbols.map(item => item.baseAsset.toLowerCase())));
+      // Mapeamos a un objeto básico (sin datos de mercado)
+      return assets.map(asset => ({
+        id: asset,
+        symbol: asset,
+        name: asset.toUpperCase(),
+        image: null,
+        market_cap: null,
+        market_cap_rank: null,
+        current_price: null,
+        total_volume: null,
+        high_24h: null,
+        low_24h: null,
+        price_change_percentage_24h: null,
+        binance_symbol: (asset + 'tusd').toLowerCase(),
+      }));
+    } catch (error) {
+      throw new AppError(`Error al obtener coins de Binance: ${error.message}`, 505);
+    }
+  }
+
+  /**
+   * Obtiene la lista de monedas desde CryptoCompare.
+   */
+  async getCoinListFromCryptoCompare() {
+    try {
+      const response = await axios.get('https://min-api.cryptocompare.com/data/all/coinlist');
+      const data = response.data.Data;
+      const coins = Object.values(data);
+      return coins.map(coin => ({
+        id: coin.Id ? coin.Id.toLowerCase() : coin.Symbol.toLowerCase(),
+        symbol: coin.Symbol.toLowerCase(),
+        name: coin.CoinName,
+        image: coin.ImageUrl ? 'https://www.cryptocompare.com' + coin.ImageUrl : null,
+        market_cap: null,
+        market_cap_rank: null,
+        current_price: null,
+        total_volume: null,
+        high_24h: null,
+        low_24h: null,
+        price_change_percentage_24h: null,
+        binance_symbol: (coin.Symbol.toLowerCase() + 'tusd').toLowerCase(),
+      }));
+    } catch (error) {
+      throw new AppError(`Error al obtener coins de CryptoCompare: ${error.message}`, 505);
+    }
+  }
+
+  /**
+   * Obtiene una lista de monedas disponibles combinando datos de CoinGecko, Binance y CryptoCompare.
+   * Se almacena en caché en Redis por 300 segundos.
+   */
+  async coinsList() {
+    try {
+      let coins = await this.redisRepository.get('coinsList');
+      if (coins && coins.length >= 250) {
+        return coins;
+      }
+
+      // Ejecutar en paralelo las 3 fuentes
+      const results = await Promise.allSettled([
+        this.getCoinListFromCoinGecko(),
+        this.getCoinListFromBinance(),
+        this.getCoinListFromCryptoCompare()
+      ]);
+
+      // Unir resultados en un Map para eliminar duplicados (usando id como clave)
+      const unionMap = new Map();
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) {
+          for (const coin of result.value) {
+            // Si ya existe, puedes actualizar o mantener el que tenga más datos, según convenga
+            unionMap.set(coin.id, coin);
+          }
+        }
+      }
+      const finalList = Array.from(unionMap.values());
+
+      // Guardar en Redis la lista unificada por 300 segundos (5 minutos)
+      await this.redisRepository.set('coinsList', finalList, 300);
+      return finalList;
+    } catch (e) {
+      throw new AppError(`Error al obtener la lista de monedas: ${e.message}`, 505);
+    }
+  }
+
+  /**
+   * Obtiene el ranking de las principales 10 monedas por capitalización de mercado que están disponibles en Binance.
+   * Se almacena en caché en Redis por 60 segundos.
+   */
+  async coinsRanking() {
+    try {
+      let rankingCoins = await this.redisRepository.get('coinsRanking');
+      if (rankingCoins && rankingCoins.length > 0) {
+        return rankingCoins;
+      }
+
+      // Consultamos CoinGecko para obtener datos de mercado (ejemplo, top 50)
+      const response = await axios.get(`${this.baseUrl}/coins/markets`, {
+        params: {
+          vs_currency: 'usd',
+          order: 'market_cap_desc',
+          per_page: 50,
+          page: 1,
+          sparkline: false,
+        },
+      });
+
+      const coins = response.data || [];
+      const filteredCoins = coins
+        .slice(0, 20)
+        .map(coin => ({
+          id: coin.id,
+          symbol: coin.symbol,
+          name: coin.name,
+          image: coin.image,
+          market_cap: coin.market_cap,
+          market_cap_rank: coin.market_cap_rank,
+          current_price: coin.current_price,
+          total_volume: coin.total_volume,
+          high_24h: coin.high_24h,
+          low_24h: coin.low_24h,
+          price_change_percentage_24h: coin.price_change_percentage_24h,
+          binance_symbol: (coin.symbol + 'tusd').toUpperCase()
+        }));
+
+      await this.redisRepository.set('coinsRanking', filteredCoins, 60);
+      return filteredCoins;
+    } catch (e) {
+      throw new AppError(`Error al obtener el ranking de monedas: ${e.message}`, 505);
+    }
+  }
+
+  /**
+   * Obtiene información detallada de una moneda específica por su ID.
+   * Primero busca en la lista almacenada en caché; si no la encuentra, consulta la API de CoinGecko.
    */
   async coinById(coinId) {
     try {
-      // Primero intenta buscar en la lista cacheada
       const coinsList = await this.redisRepository.get('coinsList');
       if (coinsList && coinsList.length > 0) {
         const coinFound = coinsList.find(coin =>
@@ -122,7 +222,6 @@ class CoingeckoRepository {
         if (coinFound) return coinFound;
       }
 
-      // Si no se encuentra, consulta directamente la API
       const response = await axios.get(`${this.baseUrl}/coins/${coinId}`, {
         params: {
           localization: false,
@@ -134,12 +233,11 @@ class CoingeckoRepository {
         },
       });
       const coin = response.data;
-      // Extraer solo los datos relevantes
       return {
         id: coin.id,
         symbol: coin.symbol,
         name: coin.name,
-        image: coin.image?.large, // puedes elegir thumb, small o large
+        image: coin.image?.large,
         market_cap: coin.market_data?.market_cap?.usd,
         market_cap_rank: coin.market_cap_rank,
         current_price: coin.market_data?.current_price?.usd,
@@ -154,19 +252,16 @@ class CoingeckoRepository {
   }
 
   /**
-   * Busca coins por símbolo en la lista almacenada en Redis.
-   * Se realiza una búsqueda case-insensitive.
+   * Busca monedas por su símbolo en la lista almacenada en caché (búsqueda case-insensitive).
    */
   async coinsBySymbol(symbol) {
     try {
       const coinsList = await this.redisRepository.get('coinsList');
       if (coinsList && coinsList.length > 0) {
-        const filteredCoins = coinsList.filter(coin =>
+        return coinsList.filter(coin =>
           coin.symbol.toLowerCase().includes(symbol.toLowerCase())
         );
-        return filteredCoins;
       } else {
-        // Si no hay lista en cache, se puede llamar a coinsList para cargarla
         const allCoins = await this.coinsList();
         return allCoins.filter(coin =>
           coin.symbol.toLowerCase().includes(symbol.toLowerCase())
@@ -177,23 +272,19 @@ class CoingeckoRepository {
     }
   }
 
-
   async getAllForeignExchange() {
     try {
-      // Intentamos obtener la lista desde Redis de forma asíncrona.
       const foreignExchangeList = await this.redisRepository.get('foreignExchangeList');
       if (foreignExchangeList && foreignExchangeList.length > 0) {
         return foreignExchangeList;
       }
-
-      // Si no se encuentra en cache, se consulta la API externa
       const { data } = await axios.get('https://gist.githubusercontent.com/stevekinney/8334552/raw/currency-symbols.json');
       if (data && data.length > 0) {
-        // Guardamos en Redis; el TTL se puede agregar si se desea, por ejemplo, 3600 segundos (1 hora)
         await this.redisRepository.set('foreignExchangeList', data, 3600);
         return data;
-      } else
-        throw new AppError('No se encontro el recurso buscado', 404);
+      } else {
+        throw new AppError('No se encontró el recurso buscado', 404);
+      }
     } catch (e) {
       throw new AppError(e.message, 505);
     }
@@ -201,17 +292,19 @@ class CoingeckoRepository {
 
   async convertirCryptoAmoneda(cryptoId, fiatCurrency, cantidadCrypto) {
     try {
+      const moneda = fiatCurrency.toLowerCase();
       const response = await axios.get(`${this.baseUrl}/simple/price`, {
         params: {
-          ids: cryptoId,              // Ej: 'bitcoin'
-          vs_currencies: fiatCurrency.toLowerCase() // Ej: 'usd'
+          ids: cryptoId,
+          vs_currencies: moneda
         }
       });
-
-      const precio = response.data[cryptoId][fiatCurrency];
+      const precio = response.data[cryptoId][moneda];
       const resultado = cantidadCrypto * precio;
-      if (isNaN)
-        throw AppError('Recurso no encontrado')
+      
+      if (isNaN(resultado)) {
+        throw new AppError('Recurso no encontrado', 404);
+      }
       return resultado;
     } catch (error) {
       throw new AppError(error.message, 505);

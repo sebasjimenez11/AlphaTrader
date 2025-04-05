@@ -35,6 +35,14 @@ socket.on("conversionData", (data) => {
   console.log("Datos de conversión:", data);
 });
 
+socket.on("secondaryCoinsLiveUpdate", (data) => {
+  console.log("Datos de conversión:", data);
+});
+
+socket.on("mainCoinsLiveUpdate", (data) => {
+  console.log("Datos de conversión:", data);
+});
+
 socket.on("error", (error) => {
   console.error("Error recibido:", error);
 });

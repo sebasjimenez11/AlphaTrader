@@ -1,12 +1,14 @@
 import axios from "axios";
 import WebSocket from "ws";
 import AppError from "../utils/appError.js";
-import throttle from 'lodash/throttle.js';
+import pkg from "lodash/throttle.js";
+
 import EventEmitter from "events";
 import { formatLiveUpdate } from "../utils/coinDataFormatter.js";
 
 class MarketDataRepository {
   constructor(redisRepository) {
+    this.throttle = pkg;
     this.redisRepository = redisRepository;
 
     // Configuración para Binance
@@ -113,23 +115,88 @@ class MarketDataRepository {
   // -------------------------------
   // Métodos para Actualizaciones en Vivo
   // -------------------------------
+
+/**
+ * Suscribe a actualizaciones en tiempo real desde Binance para un solo símbolo.
+ * @param {string} symbol - El símbolo (por ejemplo, "BTCUSDT").
+ * @returns {WebSocket} - Instancia del WebSocket.
+ */
+async subscribeToSingleMarketUpdate(symbol) {
+  try {
+    const ws = new WebSocket(`${this.binanceWsUrl}/ws/${symbol.toLowerCase()}@miniTicker`);
+
+    ws.on("open", () => console.log(`Conectado a Binance WebSocket [${symbol}]`));
+
+    // Procesamiento con throttling de 200ms (5 mensajes/segundo)
+    const processMessageThrottled = this.throttle(async (data) => {
+      try {
+        const coinDataRaw = JSON.parse(data);
+        const coinData = formatLiveUpdate(coinDataRaw);
+
+        await this.redisRepository.set(`marketData:realtime:${symbol}`, coinData, 60);
+        this.eventEmitter.emit("marketDataUpdate", coinData);
+      } catch (err) {
+        console.error("Error procesando mensaje:", err);
+      }
+    }, 200);
+
+    ws.on("message", (data) => {
+      processMessageThrottled(data);
+    });
+
+    ws.on("error", (err) => {
+      console.error("Error en WebSocket:", err);
+      throw new AppError(err.message, 500);
+    });
+
+    ws.on("close", () => console.log(`WebSocket cerrado [${symbol}]`));
+
+    return ws;
+  } catch (error) {
+    throw new AppError(error.message, 505);
+  }
+}
+
   /**
-   * Se suscribe a actualizaciones en tiempo real desde Binance para múltiples símbolos.
-   * Los datos se almacenan en Redis y se emiten como arreglo con todos los símbolos.
+   * Se suscribe a actualizaciones en tiempo real desde Binance para un solo símbolo.
+   * Los datos se almacenan en Redis y se emiten como un solo objeto.
    *
-   * @param {string[]} symbols - Lista de símbolos (ej. ["BTCUSDT", "ETHUSDT"])
+   * @param {string} symbol - El símbolo (ej. "BTCUSDT")
    * @returns {WebSocket} - La instancia del WebSocket.
+   */
+  /**
+   * Suscribe a actualizaciones en tiempo real desde Binance para múltiples símbolos.
+   * @param {string[]} symbols - Lista de símbolos (por ejemplo, ["BTCUSDT", "ETHUSDT"]).
+   * @returns {WebSocket} - Instancia del WebSocket.
    */
   subscribeToMultipleMarketUpdates(symbols) {
     try {
-      const streams = symbols.map(s => `${s.toLowerCase()}@miniTicker`).join("/");
-      const ws = new WebSocket(`${this.binanceWsUrl}/stream?streams=${streams}`);
+      // Verificar y normalizar los símbolos
+      const validSymbols = symbols
+        .map(s => {
+          const lower = s.toLowerCase();
+          // Reemplaza el sufijo "tusd" por "usdt"
+          const fixed = lower.replace(/tusd$/, "usdt");
+          // Asegura que termine en "usdt"
+          return fixed.endsWith("usdt") ? fixed : fixed + "usdt";
+        })
+        .filter(s => /^[a-z0-9]+usdt$/.test(s));
+
+      if (validSymbols.length === 0) {
+        throw new Error("No se han proporcionado símbolos válidos para Binance.");
+      }
+
+      // Construir la cadena de streams
+      const streams = validSymbols.map(s => `${s}@miniTicker`).join("/");
+      const wsUrl = `${this.binanceWsUrl}/stream?streams=${streams}`;
+
+      const ws = new WebSocket(wsUrl);
       const marketData = {};
 
       ws.on("open", () => console.log("Conectado a Binance WebSocket [Múltiples]"));
 
-      // Función de procesamiento con throttling: 200ms = 5 mensajes/segundo
-      const processMessageThrottled = throttle(async (data) => {
+      // Procesamiento con throttling de 200ms (5 mensajes/segundo)
+      const processMessageThrottled = this.throttle(async (data) => {
         try {
           const parsed = JSON.parse(data);
           const coinDataRaw = parsed.data;
@@ -149,7 +216,6 @@ class MarketDataRepository {
 
       ws.on("error", (err) => {
         console.error("Error en WebSocket:", err);
-        throw new AppError(err.message, 500);
       });
 
       ws.on("close", () => console.log("WebSocket cerrado [Múltiples]"));
@@ -160,48 +226,6 @@ class MarketDataRepository {
     }
   }
 
-  /**
-   * Se suscribe a actualizaciones en tiempo real desde Binance para un solo símbolo.
-   * Los datos se almacenan en Redis y se emiten como un solo objeto.
-   *
-   * @param {string} symbol - El símbolo (ej. "BTCUSDT")
-   * @returns {WebSocket} - La instancia del WebSocket.
-   */
-  async subscribeToSingleMarketUpdate(symbol) {
-    try {
-      const ws = new WebSocket(`${this.binanceWsUrl}/ws/${symbol.toLowerCase()}@miniTicker`);
-
-      ws.on("open", () => console.log(`Conectado a Binance WebSocket [${symbol}]`));
-
-      // Aplicamos throttling para procesar a lo sumo 5 mensajes por segundo
-      const processMessageThrottled = throttle(async (data) => {
-        try {
-          const coinDataRaw = JSON.parse(data);
-          const coinData = formatLiveUpdate(coinDataRaw);
-
-          await this.redisRepository.set(`marketData:realtime:${symbol}`, coinData, 60);
-          this.eventEmitter.emit("marketDataUpdate", coinData);
-        } catch (err) {
-          console.error("Error procesando mensaje:", err);
-        }
-      }, 200);
-
-      ws.on("message", (data) => {
-        processMessageThrottled(data);
-      });
-
-      ws.on("error", (err) => {
-        console.error("Error en WebSocket:", err);
-        throw new AppError(err.message, 500);
-      });
-
-      ws.on("close", () => console.log(`WebSocket cerrado [${symbol}]`));
-
-      return ws;
-    } catch (error) {
-      throw new AppError(error.message, 505);
-    }
-  }
 
   // ----------------------------
   // Métodos para Conversión de Divisas

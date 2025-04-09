@@ -104,7 +104,7 @@ class CoingeckoRepository {
   async coinsRanking() {
     try {
       let rankingCoins = await this.redisRepository.get('coinsRanking');
-      if (rankingCoins && typeof rankingCoins === "object" && Object.keys(rankingCoins).length > 0) {
+      if (rankingCoins && Array.isArray(rankingCoins) && rankingCoins.length > 0) {
         return rankingCoins;
       }
 
@@ -119,15 +119,10 @@ class CoingeckoRepository {
       });
 
       const coins = response.data || [];
-      const filteredCoins = coins.slice(0, 20).map(coin => {
-        // Se asegura de formar el símbolo de Binance en mayúsculas
-        coin.binance_symbol = (coin.symbol + "TUSD").toUpperCase();
-        return formatCoinData(coin);
-      });
+      const filteredCoins = coins.slice(0, 20).map(coin => formatCoinData(coin));
 
-      const finalRanking = arrayToObjectByKey(filteredCoins);
-      await this.redisRepository.set('coinsRanking', finalRanking, 60);
-      return finalRanking;
+      await this.redisRepository.set('coinsRanking', filteredCoins, 60);
+      return filteredCoins;
     } catch (e) {
       throw new AppError(`Error al obtener el ranking de monedas: ${e.message}`, 505);
     }
@@ -140,7 +135,7 @@ class CoingeckoRepository {
   async coinsList() {
     try {
       let coins = await this.redisRepository.get('coinsList');
-      if (coins && typeof coins === "object" && Object.keys(coins).length >= 250) {
+      if (coins && Array.isArray(coins) && coins.length >= 250) {
         return coins;
       }
 
@@ -152,24 +147,18 @@ class CoingeckoRepository {
       const unionMap = new Map();
       for (const result of results) {
         if (result.status === 'fulfilled' && result.value) {
-          // result.value es un arreglo; recorremos y formateamos
           result.value.forEach(coin => {
-            // Normalizamos el símbolo de Binance
-            coin.binance_symbol = coin.binance_symbol
-              ? coin.binance_symbol.toUpperCase()
-              : (coin.symbol ? (coin.symbol + "TUSD").toUpperCase() : null);
             unionMap.set(coin.id, formatCoinData(coin));
           });
         }
       }
-      const finalList = arrayToObjectByKey(Array.from(unionMap.values()));
+      const finalList = Array.from(unionMap.values());
       await this.redisRepository.set('coinsList', finalList, 300);
       return finalList;
     } catch (e) {
       throw new AppError(`Error al obtener la lista de monedas: ${e.message}`, 505);
     }
   }
-
   /**
    * Obtiene el ranking de las principales 10 monedas por capitalización de mercado que están disponibles en Binance.
    * Se almacena en caché en Redis por 60 segundos.

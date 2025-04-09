@@ -1,11 +1,10 @@
-// src/app.js
 import express from "express";
 import cors from "cors";
 import http from "http";
 import session from "express-session";
 import dotenv from "dotenv";
 import { createClient } from "redis";
-import { RedisStore } from "connect-redis";
+import connectRedis from "connect-redis";
 
 dotenv.config();
 
@@ -28,47 +27,67 @@ app.use(
   })
 );
 
-// Configuración de Redis para sesiones
+// Crear y configurar el cliente de Redis
 const redisClient = createClient({
-  legacyMode: true,
   url: process.env.REDIS_URL,
   socket: {
+    connectTimeout: 10000, // Tiempo de espera de 10 segundos
     tls: true,
-    rejectUnauthorized: false,
+    rejectUnauthorized: true,
+    keepAlive: 5000,
   },
 });
 
-redisClient.on('error', (err) => {
-  console.error('❌ Error en Redis:', err);
+// Manejo de eventos del cliente Redis
+redisClient.on("error", (err) => {
+  console.error("❌ Error en Redis:", err);
 });
 
-redisClient.on('connect', () => {
-  console.log('✅ Conexión exitosa a Redis');
+redisClient.on("connect", () => {
+  console.log("✅ Conexión exitosa a Redis");
 });
 
-redisClient.on('reconnecting', () => {
-  console.warn('🔄 Reintentando conexión a Redis...');
+redisClient.on("reconnecting", () => {
+  console.warn("🔄 Reintentando conexión a Redis...");
+});
+
+redisClient.on("end", () => {
+  console.log("🔌 Conexión a Redis cerrada");
 });
 
 // Conectar al cliente Redis
-redisClient.connect().catch((err) => {
-  console.error('Error conectando a Redis:', err);
+await redisClient.connect().catch((err) => {
+  console.error("Error conectando a Redis:", err);
 });
 
-iniciarTareaPingRedis(redisClient, "*/5 * * * *"); // PING cada 5 minutos
-// Configurar la sesión utilizando RedisStore
+// Iniciar tarea de PING a Redis cada 2 minutos
+iniciarTareaPingRedis(redisClient, "*/2 * * * *");
+
+// Configurar RedisStore para express-session
+const RedisStore = connectRedis(session);
+
 app.use(
   session({
     store: new RedisStore({ client: redisClient }),
     secret: process.env.JWT_SECRET || "secret_key",
     resave: false,
     saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production", // Asegúrate de usar cookies seguras en producción
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24, // 1 día
+    },
   })
 );
 
 // Inicializar Passport
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Definir una ruta para la página de inicio
+app.get("/", (req, res) => {
+  res.send("¡Bienvenido a AlphaTrader!");
+});
 
 // Montar routers
 app.use("/auth", authRouter);

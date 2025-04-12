@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { createClient } from "redis";
 import connectRedis from "connect-redis";
 
+// Cargar variables de entorno desde .env
 dotenv.config();
 
 // Importa configuraciones y routers para la API REST
@@ -14,6 +15,7 @@ import authRouter from "./routers/authRouter.js";
 import userRouter from "./routers/userRouter.js";
 import sequelize from "./config/db.js";
 import errorHandler from "./middlewares/errorHandler.js";
+import gemini from "./routers/geminiRouter.js";
 import { ejecutarTareaCoins, tareaProgramadaCoins, iniciarTareaPingRedis } from "./utils/task.js";
 
 // Inicializar Express
@@ -32,12 +34,15 @@ app.use(
   })
 );
 
-// Crear y configurar el cliente de Redis
+// Crear y configurar el cliente de Redis usando variables de entorno
 const redisClient = createClient({
-  url: process.env.REDIS_URL,
+  username: process.env.REDIS_USERNAME,
+  password: process.env.REDIS_PASSWORD,
   socket: {
+    host: process.env.REDIS_HOST,
+    port: Number(process.env.REDIS_PORT) || 6379,
     connectTimeout: 10000, // Tiempo de espera de 10 segundos
-    tls: true,
+    tls: process.env.REDIS_TLS === "true", // Configuración para TLS
     rejectUnauthorized: true,
     keepAlive: 5000,
   },
@@ -47,15 +52,12 @@ const redisClient = createClient({
 redisClient.on("error", (err) => {
   console.error("❌ Error en Redis:", err);
 });
-
 redisClient.on("connect", () => {
   console.log("✅ Conexión exitosa a Redis");
 });
-
 redisClient.on("reconnecting", () => {
   console.warn("🔄 Reintentando conexión a Redis...");
 });
-
 redisClient.on("end", () => {
   console.log("🔌 Conexión a Redis cerrada");
 });
@@ -78,7 +80,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production", // Asegúrate de usar cookies seguras en producción
+      secure: process.env.NODE_ENV === "production", // Uso de cookies seguras en producción
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24, // 1 día
     },
@@ -97,6 +99,7 @@ app.get("/", (req, res) => {
 // Montar routers
 app.use("/auth", authRouter);
 app.use("/user", userRouter);
+app.use("/gemini", gemini);
 
 // Middleware de manejo de errores globales
 app.use(errorHandler);

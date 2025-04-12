@@ -1,6 +1,8 @@
 import fetch from 'node-fetch';
 
-const API_KEY = 'AIzaSyAjD5R2bI7wiTBuSrwAMN7zIn_DwSetlfQ';
+const API_KEY = process.env.GEMINI_API_KEY;
+console.log(API_KEY);
+
 const URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
 
 class GeminiService {

@@ -1,6 +1,5 @@
 name: Desplegar en Railway
 
-# Se activa al hacer push a la rama main
 on:
   push:
     branches: [ main ]
@@ -10,38 +9,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Paso 1: Extraer el código del repositorio
       - name: Checkout del repositorio
         uses: actions/checkout@v3
 
-      # Paso 2: Configurar Node.js (ajusta la versión según tus necesidades)
       - name: Configurar Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20.18.3'
 
-      # Paso 3: Instalar dependencias (y ejecutar tests o build si lo requieres)
       - name: Instalar dependencias
         run: npm install
 
-      #- name: Ejecutar tests
-      #  run: npm test
-
-      #- name: Construir la aplicación
-      #  run: npm run build
-
-      # Paso 4: Instalar Railway CLI globalmente
+      # Paso de instalación del Railway CLI actualizado
       - name: Instalar Railway CLI
-        run: npm install -g railway
+        run: npm install -g @railway/cli
 
-      # Paso 5: Desplegar en Railway solo el servicio AlphaTraderService
+      # Desplegar en Railway (se usa el token definido en GitHub Secrets)
       - name: Desplegar en Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}      # Token API configurado en GitHub Secrets
           RAILWAY_PROJECT: ${{ secrets.RAILWAY_PROJECT }}      # ID o nombre del proyecto
-          RAILWAY_SERVICE: "AlphaTraderServer"                # Nombre del servicio que deseas desplegar
+          RAILWAY_SERVICE: "AlphaTraderServer"                # Nombre exacto del servicio a desplegar
         run: |
-          # Autenticamos Railway utilizando el token
-          railway login --token "$RAILWAY_TOKEN"
-          # Desplegamos únicamente el servicio AlphaTraderService
+          # Desplegar únicamente el servicio AlphaTraderServer
           railway up --service "$RAILWAY_SERVICE"

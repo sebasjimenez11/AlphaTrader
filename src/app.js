@@ -30,16 +30,8 @@ app.use(cors({
 // Middleware para parsear JSON
 app.use(express.json());
 
-// Construir la URL de conexión a Redis
-const protocol = process.env.REDIS_TLS === "true" ? "rediss" : "redis";
-const redisUrl = `${protocol}://${process.env.REDIS_USERNAME}:${process.env.REDIS_PASSWORD}@${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`;
-
 const redisClient = createClient({
-  url: redisUrl,
-  socket: {
-    tls: process.env.REDIS_TLS === "true",
-    rejectUnauthorized: false,
-  },
+  url: process.env.REDIS_URL,
 });
 
 

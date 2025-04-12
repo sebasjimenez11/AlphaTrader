@@ -34,10 +34,14 @@ app.use(express.json());
 const protocol = process.env.REDIS_TLS === "true" ? "rediss" : "redis";
 const redisUrl = `${protocol}://${process.env.REDIS_USERNAME}:${process.env.REDIS_PASSWORD}@${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`;
 
-// Crear y conectar el cliente de Redis
 const redisClient = createClient({
-  url: redisUrl
+  url: redisUrl,
+  socket: {
+    tls: process.env.REDIS_TLS === "true",
+    rejectUnauthorized: false,
+  },
 });
+
 
 redisClient.on("error", (err) => {
   console.error("❌ Error en Redis:", err);

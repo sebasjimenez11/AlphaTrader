@@ -60,7 +60,7 @@ class CoingeckoRepository {
         high_24h: coin.high_24h,
         low_24h: coin.low_24h,
         price_change_percentage_24h: coin.price_change_percentage_24h,
-        binance_symbol: (coin.symbol + 'tusd').toLowerCase(),
+        binance_symbol: (coin.symbol + 'usdt').toLowerCase(),
       }));
     } catch (error) {
       throw new AppError(`Error al obtener coins de CoinGecko: ${error.message}`, 505);
@@ -88,7 +88,7 @@ class CoingeckoRepository {
           high_24h: null,
           low_24h: null,
           price_change_percentage_24h: null,
-          binance_symbol: (asset + "TUSD").toUpperCase()
+          binance_symbol: (asset + "USDT").toUpperCase()
         };
         return formatCoinData(coin);
       });
@@ -196,7 +196,7 @@ class CoingeckoRepository {
           high_24h: coin.high_24h,
           low_24h: coin.low_24h,
           price_change_percentage_24h: coin.price_change_percentage_24h,
-          binance_symbol: (coin.symbol + 'tusd').toUpperCase()
+          binance_symbol: (coin.symbol + 'usdt').toUpperCase()
         }));
 
       await this.redisRepository.set('coinsRanking', filteredCoins, 60);
@@ -233,7 +233,7 @@ class CoingeckoRepository {
       });
       const coin = response.data;
       // Aseguramos el símbolo de Binance
-      coin.binance_symbol = (coin.symbol + "TUSD").toUpperCase();
+      coin.binance_symbol = (coin.symbol + "USDT").toUpperCase();
       return formatCoinData(coin);
     } catch (e) {
       throw new AppError(e.message, 505);

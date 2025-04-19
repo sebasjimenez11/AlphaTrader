@@ -17,8 +17,22 @@ class UserController {
     const { email } = req.user;
     const { fullName, dateOfBirth } = req.body;
     const updatedUser = await this.userService.completeUserProfile(email, { fullName, dateOfBirth });
-    res.json({ status: true, user: updatedUser });
+    res.status(201).json({ status: true, user: updatedUser });
   }
+
+  async uploadProfileImage(req, res, next) {
+    const { file: file, tokenEmail: userEmail, tokenID: userId } = req.body;
+
+    // El servicio manejará la subida a Cloudinary y la limpieza del archivo temporal
+    const { imageUrl } = await this.userService.uploadProfileImage(userEmail, userId, file);
+
+    res.status(201).json({
+      status: true,
+      message: 'Imagen de perfil actualizada con éxito.',
+      imageUrl: imageUrl
+    });
+  }
+
 }
 
 export default UserController;

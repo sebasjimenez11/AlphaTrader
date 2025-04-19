@@ -52,6 +52,16 @@ const User = sequelize.define('User', {
   acceptedTerms: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
+  },
+  profilePicture: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: 'default_profile_picture.png',
+  },
+  public_id: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: 'default_profile_picture',
   }
 });
 

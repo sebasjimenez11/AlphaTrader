@@ -1,17 +1,17 @@
 import RedisRepository from '../repositories/redisRepository.js';
-import CoingeckoRepository from '../repositories/coingeckoRepository.js';
+import CoingeckoAdapter from '../adapters/coingeckoAdapter.js';
 import AppError from '../utils/appError.js';
 
 
 class TaskService {
     constructor() {
         this.redisRepository = new RedisRepository();
-        this.coingeckoRepository = new CoingeckoRepository(this.redisRepository);
+        this.CoingeckoAdapter = new CoingeckoAdapter(this.redisRepository);
     }
 
     async getCoinsBinance() {
         try {
-            const coinsListBinance = await this.coingeckoRepository.getBinanceCoins();
+            const coinsListBinance = await this.CoingeckoAdapter.getBinanceCoins();
             if (!coinsListBinance) {
                 throw new AppError('No se pudo obtener la lista de monedas de Binance', 404);
             }
@@ -24,7 +24,7 @@ class TaskService {
 
     async getCoinsCoingecko() {
         try {
-            const coinsListCoingecko = await this.coingeckoRepository.coinsList();
+            const coinsListCoingecko = await this.CoingeckoAdapter.coinsList();
             if (!coinsListCoingecko) {
                 throw new AppError('No se pudo obtener la lista de monedas de Coingecko', 404);
             }
@@ -37,7 +37,7 @@ class TaskService {
 
     async getCoinsRanking() {
         try {
-            const coinsRanking = await this.coingeckoRepository.coinsRanking();
+            const coinsRanking = await this.CoingeckoAdapter.coinsRanking();
             if (!coinsRanking) {
                 throw new AppError('No se pudo obtener el ranking de monedas', 404);
             }

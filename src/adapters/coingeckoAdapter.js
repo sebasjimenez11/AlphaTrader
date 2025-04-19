@@ -1,7 +1,7 @@
 import axios from "axios";
 import AppError from "../utils/appError.js";
 import { formatCoinData, arrayToObjectByKey } from "../utils/coinDataFormatter.js";
-class CoingeckoRepository {
+class CoinGeckoAdapter {
   constructor(redisRepository) {
     this.redisRepository = redisRepository;
     this.baseUrl = process.env.BASE_URL_COINGECKO; // Ejemplo: "https://api.coingecko.com/api/v3"
@@ -304,4 +304,4 @@ class CoingeckoRepository {
   }
 }
 
-export default CoingeckoRepository;
+export default CoinGeckoAdapter;

@@ -2,6 +2,7 @@
 import { generateToken } from '../utils/jwt.js';
 import generateHash from '../utils/generateHash.js';
 import AppError from '../utils/appError.js';
+import uploadToCloudinary from '../utils/cloudinaryUploader.js';
 
 class UserService {
   constructor(userRepository) {
@@ -40,10 +41,32 @@ class UserService {
     }
 
     user.DateOfBirth = dateOfBirth;
-    
+
     user.Status = true;
     await user.save();
     return user;
+  }
+
+  async uploadProfileImage(userEmail, userId, file) {
+    try {
+      const { secure_url, public_id } = await uploadToCloudinary(file.path, {
+        public_id: `profile_pictures/${user.id}`, // Ejemplo: Usar ID de usuario como public ID
+        overwrite: true // Asegurarse de sobrescribir si usas un public_id fijo
+      });
+
+      const user = await this.userRepository.updateById(userId, { profilePicture: secure_url, public_id: public_id }); // Asumiendo que userRepository tiene un método save o equivalente para actualizar
+      if (!user) {
+        throw new AppError('Error al actualizar la imagen de perfil', 400);
+      }
+      return { user, imageUrl: secure_url };
+
+    } catch (error) {
+      console.error("❌ Error en UserService.uploadProfileImage:", error);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Error interno al subir la imagen de perfil.', 500);
+    }
   }
 }
 

@@ -6,7 +6,7 @@ import pkg from "lodash/throttle.js";
 import EventEmitter from "events";
 import { formatLiveUpdate } from "../utils/coinDataFormatter.js";
 
-class MarketDataRepository {
+class marketDataAdapter {
   constructor(redisRepository) {
     this.throttle = pkg;
     this.redisRepository = redisRepository;
@@ -116,47 +116,6 @@ class MarketDataRepository {
   // Métodos para Actualizaciones en Vivo
   // -------------------------------
 
-/**
- * Suscribe a actualizaciones en tiempo real desde Binance para un solo símbolo.
- * @param {string} symbol - El símbolo (por ejemplo, "BTCUSDT").
- * @returns {WebSocket} - Instancia del WebSocket.
- */
-async subscribeToSingleMarketUpdate(symbol) {
-  try {
-    const ws = new WebSocket(`${this.binanceWsUrl}/ws/${symbol.toLowerCase()}@miniTicker`);
-
-    ws.on("open", () => console.log(`Conectado a Binance WebSocket [${symbol}]`));
-
-    // Procesamiento con throttling de 200ms (5 mensajes/segundo)
-    const processMessageThrottled = this.throttle(async (data) => {
-      try {
-        const coinDataRaw = JSON.parse(data);
-        const coinData = formatLiveUpdate(coinDataRaw);
-
-        await this.redisRepository.set(`marketData:realtime:${symbol}`, coinData, 60);
-        this.eventEmitter.emit("marketDataUpdate", coinData);
-      } catch (err) {
-        console.error("Error procesando mensaje:", err);
-      }
-    }, 200);
-
-    ws.on("message", (data) => {
-      processMessageThrottled(data);
-    });
-
-    ws.on("error", (err) => {
-      console.error("Error en WebSocket:", err);
-      throw new AppError(err.message, 500);
-    });
-
-    ws.on("close", () => console.log(`WebSocket cerrado [${symbol}]`));
-
-    return ws;
-  } catch (error) {
-    throw new AppError(error.message, 505);
-  }
-}
-
   /**
    * Se suscribe a actualizaciones en tiempo real desde Binance para un solo símbolo.
    * Los datos se almacenan en Redis y se emiten como un solo objeto.
@@ -249,4 +208,4 @@ async subscribeToSingleMarketUpdate(symbol) {
   }
 }
 
-export default MarketDataRepository;
+export default marketDataAdapter;

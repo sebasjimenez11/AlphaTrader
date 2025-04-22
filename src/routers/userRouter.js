@@ -22,7 +22,7 @@ router.post(
   validationErrors,
   catchAsync(userController.register.bind(userController))
 );
-userId
+
 // Completar perfil de usuario
 router.put(
   '/completeProfile',

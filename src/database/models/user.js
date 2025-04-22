@@ -63,6 +63,15 @@ const User = sequelize.define('User', {
     allowNull: true,
     defaultValue: 'default_profile_picture',
   }
+}, {
+  tableName: 'users', // Especificar nombre de tabla
+  timestamps: true,
+  indexes: [ // Define índices para mejorar el rendimiento de las búsquedas y limpieza
+    {
+      fields: ['Email'], // Índice para buscar el token
+      unique: true, // Asegura la unicidad a nivel de índice (además de la restricción en el campo)
+    }
+  ]
 });
 
 export default User;

@@ -1,6 +1,6 @@
 import axios from "axios";
-import templateID from "../utils/templateId";
-import AppError from "../utils/appError";
+import templateID from "../utils/templateId.js";
+import AppError from "../utils/appError.js";
 
 export const sendMailViaWorker = async (mail, type, userName, urlToken = "") => {
     let templateId = templateID(type);

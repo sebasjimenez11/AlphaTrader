@@ -2,14 +2,24 @@
 import express from "express";
 import http from "http";
 import dotenv from "dotenv";
-import sequelize from "./config/db.js"; // Tu configuración existente de Sequelize
-import errorHandler from "./middlewares/errorHandler.js"; // Tu middleware de manejo de errores
-import SocketServer from "./sockets/socketServer.js"; // Tu servidor de sockets
-import fs from 'fs'; // Necesario para crear el directorio 'uploads'
+
+// --- Cargar variables de entorno (DEBE SER LA PRIMERA COSA QUE SE EJECUTE SECUENCIALMENTE) ---
+const dotenvResult = dotenv.config(); // <-- Captura el resultado
+if (dotenvResult.error) {
+  console.error('Error loading .env file:', dotenvResult.error); // <-- **AÑADE ESTO**
+} else
+  dotenvResult.parsed;
+
+import sequelize from "./config/db.js";
+import errorHandler from "./middlewares/errorHandler.js";
+import SocketServer from "./sockets/socketServer.js";
+import fs from 'fs';
+
+import * as models from './database/models/index.js';
+import { syncModels } from './database/models/index.js';
 
 // --- Importar Módulos de Configuración e Inicialización ---
 // Cargar variables de entorno (Debe ser lo primero)
-dotenv.config();
 
 // Configurar Cloudinary (solo importar para ejecutar la configuración)
 import './config/cloudinaryConfig.js';
@@ -36,8 +46,8 @@ const app = express();
 // Crear el directorio 'uploads' si no existe (Puedes mantenerlo aquí o moverlo a un archivo de setup general si tienes más inicializaciones FS)
 const uploadDir = './uploads';
 if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir);
-    console.log('Created uploads directory');
+  fs.mkdirSync(uploadDir);
+  console.log('Created uploads directory');
 }
 
 // Conectar a Redis - Lógica de arranque crítica
@@ -93,8 +103,8 @@ const gracefulShutdown = async () => {
   try {
     // Cerrar Redis (si existe el cliente)
     if (redisClient) {
-       await redisClient.quit();
-       console.log("Redis client disconnected.");
+      await redisClient.quit();
+      console.log("Redis client disconnected.");
     }
 
     // Cerrar Sequelize
@@ -112,11 +122,11 @@ const gracefulShutdown = async () => {
     process.exit(1); // Salir con error
   }
 
-   // Forzar salida después de un tiempo si el cierre gracioso se cuelga
-   setTimeout(() => {
-       console.error("Cierre gracioso forzado después de timeout.");
-       process.exit(1);
-   }, 10000); // 10 segundos de timeout
+  // Forzar salida después de un tiempo si el cierre gracioso se cuelga
+  setTimeout(() => {
+    console.error("Cierre gracioso forzado después de timeout.");
+    process.exit(1);
+  }, 10000); // 10 segundos de timeout
 };
 
 process.on("SIGINT", gracefulShutdown); // Ctrl+C
@@ -125,12 +135,12 @@ process.on("SIGTERM", gracefulShutdown); // kill command
 
 // Sincronizar Base de Datos y Levantar Servidor (Mantener aquí - Secuencia de arranque final)
 console.log("⚙️ Sincronizando base de datos...");
-sequelize.sync({ alter: true }).then(() => { // alter: true intentará modificar tablas existentes, force: true las droppeará y creará
-  console.log("✅ Base de datos sincronizada");
+try {
+  await syncModels(false); // false para alter, true para force
   server.listen(process.env.PORT || 3000, () => {
     console.log(`🚀 Servidor corriendo en puerto ${process.env.PORT || 3000}`);
   });
-}).catch((error) => {
-  console.error("❌ Error al sincronizar la base de datos:", error.message);
-  process.exit(1); // Terminar si falla la sincronización de la DB
-});
+} catch (error) {
+  console.error("❌ Error al sincronizar la base de datos:", error);
+  process.exit(1);
+}

@@ -16,7 +16,7 @@ export const sendMailViaWorker = async (mail, type, userName, urlToken = "") => 
         });
         return response.data;
     } catch (error) {
-        throw new AppError("Error al enviar el correo", 500);
+        console.error("Error al enviar el correo", error);
     }
 };
 

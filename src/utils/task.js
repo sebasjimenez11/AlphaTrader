@@ -10,7 +10,6 @@ export const ejecutarTareaCoins = async () => {
     await taskService.getCoinsBinance();
     await taskService.getCoinsCoingecko();
     await taskService.getCoinsRanking();
-    console.log(`[INIT] Tareas iniciales completadas`);
   } catch (error) {
     console.error(`[INIT] Error ejecutando tareas: ${error.message}`);
   }
@@ -50,9 +49,6 @@ export function iniciarTareaPingRedis(redisClient, schedule = '* * * * *') {
       console.error('Error en ping de Redis:', err);
     }
   });
-
-  console.log('Tarea programada para enviar PING a Redis iniciada.');
-
   // Retorna la tarea por si se necesita detenerla o manipularla posteriormente
   return tarea;
 }

@@ -133,3 +133,26 @@ export const validateAcceptedTermsField = (fieldName) => {
       return true;
     });
 };
+
+export const validatePasswordConfirmationField = (fieldName) => {
+  return body(fieldName)
+    .notEmpty().withMessage(`La confirmación de contraseña es requerida`)
+    .custom((value, { req }) => {
+      if (value !== req.body.password) {
+        throw new Error("Las contraseñas no coinciden");
+      }
+      return true;
+    });
+};
+
+export const validateTokenField = (fieldName) => {
+  return body(fieldName)
+    .notEmpty()
+    .withMessage('El token es requerido')
+    .isString()
+    .withMessage('El token debe ser una cadena de texto')
+    .isLength({ min: 32, max: 32 })
+    .withMessage('Token inválido')
+    .matches(/^[A-Za-z0-9_-]+$/)
+    .withMessage('Formato de token inválido')
+};

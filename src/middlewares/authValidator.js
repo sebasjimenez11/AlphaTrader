@@ -8,3 +8,11 @@ export const loginValidator = () => [
 export const recoveryPassword = () => [
   validator.validateEmailField('Email')
 ];
+
+export const passwordChange = () => [
+  validator.validateTokenField('token'),
+  validator.validatePasswordField('password'),
+  validator.validatePasswordField('passwordConfirmation'),
+  validator.validateEmailField('email'),
+  validator.validatePasswordConfirmationField('passwordConfirmation')
+];

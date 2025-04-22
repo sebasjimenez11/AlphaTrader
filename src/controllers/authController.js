@@ -15,6 +15,16 @@ class AuthController {
     const result = await this.authService.findOrCreateByOAuth(req.user);
     res.status(200).json({ status: true, ...result });
   }
+
+  async recoverPassword(req, res) {
+    const { success, message } = await this.authService.recoverPassword(req.body);
+    res.status(200).json({ status: success, message });
+  }
+
+  async passwordChange(req, res) {
+    const { success, message } = await this.authService.passwordChange(req.body);
+    res.status(200).json({ status: success, message });
+  }
 }
 
 export default AuthController;

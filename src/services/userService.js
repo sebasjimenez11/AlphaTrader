@@ -3,6 +3,7 @@ import { generateToken } from '../utils/jwt.js';
 import generateHash from '../utils/generateHash.js';
 import AppError from '../utils/appError.js';
 import uploadToCloudinary from '../utils/cloudinaryUploader.js';
+import sendMailViaWorker from '../adapters/sendMailViaWorker.js';
 
 class UserService {
   constructor(userRepository) {
@@ -27,6 +28,7 @@ class UserService {
     if (!user) {
       throw new AppError('Error al crear el usuario', 400);
     }
+    sendMailViaWorker(user.Email, 'welcome', user.FullName);
     const token = generateToken(user);
     return { token };
   }

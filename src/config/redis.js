@@ -8,7 +8,6 @@ import { iniciarTareaPingRedis } from "../utils/task.js"; // Importa la tarea de
  * @returns {Promise<object>} El cliente de Redis conectado.
  */
 const connectRedisClient = async () => {
-  console.log("⚙️ Conectando a Redis...");
 
   const redisClient = createClient({
     url: process.env.REDIS_URL,

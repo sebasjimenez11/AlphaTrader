@@ -52,7 +52,7 @@ class UserService {
   async uploadProfileImage(userEmail, userId, file) {
     try {
       const { secure_url, public_id } = await uploadToCloudinary(file.path, {
-        public_id: `profile_pictures/${user.id}`, // Ejemplo: Usar ID de usuario como public ID
+        public_id: `profile_pictures/${userId}`, // Ejemplo: Usar ID de usuario como public ID
         overwrite: true // Asegurarse de sobrescribir si usas un public_id fijo
       });
 
@@ -69,6 +69,18 @@ class UserService {
       }
       throw new AppError('Error interno al subir la imagen de perfil.', 500);
     }
+  }
+
+  async profile(userId) {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new AppError('Usuario no encontrado', 404);
+    }
+    return {
+      status: true,
+      message: 'Usuario encontrado',
+      data: user
+    };
   }
 }
 

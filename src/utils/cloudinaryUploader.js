@@ -1,18 +1,22 @@
+// src/utils/uploadToCloudinary.js
 import { v2 as cloudinary } from 'cloudinary';
-import fs from 'fs'; // Para limpiar el archivo local
-import AppError from './appError.js'; // Asumiendo que tienes una clase AppError
+import fs from 'fs';
+import AppError from './appError.js'; // Ajusta la ruta si es necesario
 
+// Esta función ASUME que 'cloudinary' ya está configurado globalmente
 const uploadToCloudinary = async (filePath, options = {}) => {
+  // ... (tu código actual de uploadToCloudinary) ...
   return new Promise((resolve, reject) => {
+    // Llama a cloudinary.uploader.upload, que usa la configuración global ya hecha
     cloudinary.uploader.upload(filePath, {
-      folder: options.folder || 'profile_pictures', // Opcional: especificar una carpeta en Cloudinary
-      use_filename: true, // Opcional: usar el nombre de archivo original
-      unique_filename: false, // Opcional: añadir dígitos únicos si el nombre de archivo ya existe
-      overwrite: true, // Opcional: sobrescribir si existe un archivo con el mismo nombre
-      ...options // Permitir sobrescribir las opciones por defecto
+      folder: options.folder || 'profile_pictures',
+      use_filename: true,
+      unique_filename: false,
+      overwrite: true,
+      ...options
     }, async (error, result) => {
-      // Siempre eliminar el archivo local temporal después del intento de subida (éxito o fallo)
-      try {
+      // ... (manejo de archivo local y error) ...
+       try {
         await fs.promises.unlink(filePath);
       } catch (unlinkError) {
         console.error(`❌ Error al eliminar el archivo local ${filePath}:`, unlinkError);
@@ -20,11 +24,21 @@ const uploadToCloudinary = async (filePath, options = {}) => {
 
       if (error) {
         console.error("❌ Error de subida a Cloudinary:", error);
+        // Verifica el error de Cloudinary para más detalles si es posible
+        console.error("Detalles del error de Cloudinary:", error); // Puede dar más contexto
+
         const appError = new AppError(`Error al subir la imagen a Cloudinary: ${error.message}`, 500);
         appError.originalError = error;
+        // Añade el código del error si está disponible
+        if (error.http_code) {
+            appError.statusCode = error.http_code; // Usa el código HTTP de Cloudinary si existe
+        } else if (error.response && error.response.status) {
+             appError.statusCode = error.response.status;
+        }
+
         return reject(appError);
       }
-      resolve(result); // result contiene secure_url, public_id, etc.
+      resolve(result);
     });
   });
 };

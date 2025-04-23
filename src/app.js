@@ -37,7 +37,7 @@ import startScheduledTasks from './config/tasks.js';
 import authRouter from "./routers/authRouter.js";
 import userRouter from "./routers/userRouter.js"; // Asegúrate que tu userRouter incluye la ruta de subida
 import geminiRouter from "./routers/geminiRouter.js";
-
+import preferencesProfileRouter from "./routers/preferencesProfileRouter.js";
 // --- Proceso de Inicialización de la Aplicación ---
 
 // Inicializar Express (Corazón de app.js)
@@ -68,14 +68,10 @@ app.get("/", (req, res) => {
   res.send("¡Bienvenido a AlphaTrader!");
 });
 
-
-// Montar Routers - Define la estructura principal de la API (Mantener aquí)
-console.log("⚙️ Montando Routers...");
 app.use("/auth", authRouter);
 app.use("/user", userRouter);
 app.use("/gemini", geminiRouter);
-console.log("✅ Routers montados");
-
+app.use("/preferencesProfile", preferencesProfileRouter);
 
 // Middleware de Manejo de Errores - Siempre al final (Mantener aquí)
 app.use(errorHandler);
@@ -94,8 +90,6 @@ const socketServer = new SocketServer(server, {
   allowEIO3: true
 });
 socketServer.init();
-console.log("✅ WebSocket Server inicializado");
-
 
 // Manejo de Cierre Gracioso (Mantener aquí - Lógica de ciclo de vida)
 const gracefulShutdown = async () => {
@@ -132,9 +126,6 @@ const gracefulShutdown = async () => {
 process.on("SIGINT", gracefulShutdown); // Ctrl+C
 process.on("SIGTERM", gracefulShutdown); // kill command
 
-
-// Sincronizar Base de Datos y Levantar Servidor (Mantener aquí - Secuencia de arranque final)
-console.log("⚙️ Sincronizando base de datos...");
 try {
   await syncModels(false); // false para alter, true para force
   server.listen(process.env.PORT || 3000, () => {

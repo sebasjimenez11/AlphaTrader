@@ -34,10 +34,16 @@ router.put(
 
 router.put(
   '/imageProfile',
-  verifyToken, // Asegura que req.user esté poblado
+  verifyToken, 
   uploadSingleImage, // Procesa el archivo 'profilePicture', adjunta a req.file (si existe)
   checkFilePresence, // Verifica que req.file haya sido adjuntado por Multer
   catchAsync(userController.uploadProfileImage.bind(userController)) // Llama al controlador (ahora asume que req.file existe)
+);
+
+router.get(
+  '/profile',
+  verifyToken,
+  catchAsync(userController.profile.bind(userController))
 );
 
 export default router;

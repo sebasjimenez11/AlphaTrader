@@ -1,6 +1,7 @@
 import { body } from 'express-validator';
 import moment from 'moment';
 import allowedDomains from '../config/allowedDomains.js';
+import AppError from './appError.js';
 
 /**
  * Valida que el campo de tipo string no esté vacío
@@ -156,3 +157,64 @@ export const validateTokenField = (fieldName) => {
     .matches(/^[A-Za-z0-9_-]+$/)
     .withMessage('Formato de token inválido')
 };
+
+export const validateIsArray = (fieldName) => {
+  return body(fieldName)
+    .isArray()
+    .withMessage(`El campo "${fieldName}" debe ser un arreglo.`)
+    .bail(); // Detiene la cadena de validación si no es un arreglo
+};
+
+// =============================================================================
+// Validador Completo: Verifica si el campo es un Array, no está vacío y
+// que todos sus elementos (strings) están en una lista de opciones permitidas.
+// También sanea los elementos (trim y toLowerCase).
+// =============================================================================
+export const validateFieldArray = (fieldName, allowedOptions) => {
+  if (!Array.isArray(allowedOptions)) {
+    throw new Error('validateFieldArray requiere un array de opciones permitidas.');
+  }
+
+  const lowerCaseAllowedOptionsSet = new Set(allowedOptions.map(opt => String(opt).trim().toLowerCase()));
+  const allowedOptionsString = allowedOptions.join('", "'); // Formato para el mensaje de error
+
+  return body(fieldName)
+    .isArray()
+    .withMessage(`El campo "${fieldName}" debe ser un arreglo.`)
+    .bail() 
+    .customSanitizer(value => {
+      return value.map(item => {
+        // Sanea solo si el item es una cadena
+        if (typeof item === 'string') {
+          return item.trim().toLowerCase();
+        }
+        // Retorna el item sin modificar si no es cadena (luego se validará si es string)
+        return item;
+      });
+    })
+    .not().isEmpty()
+    .withMessage(`El campo "${fieldName}" no puede estar vacío.`)
+    .bail() 
+    .custom(value => {
+      const invalidItems = value.filter(item => {
+        return typeof item !== 'string' || item.length === 0 || !lowerCaseAllowedOptionsSet.has(item);
+      });
+
+      if (invalidItems.length > 0) {
+        const invalidItemsString = invalidItems.join('", "');
+        throw new AppError(
+          `El campo "${fieldName}" contiene valores no permitidos o inválidos: "${invalidItemsString}". Los valores permitidos son: "${allowedOptionsString}".`
+        );
+      }
+
+      return true; // La validación de contenido pasó
+    });
+};
+
+export const validateInEnum = (fieldName, enumValues) => {
+  return body(fieldName)
+    .notEmpty()
+    .withMessage(`El campo "${fieldName}" es requerido`)
+    .isIn(enumValues)
+    .withMessage(`El campo "${fieldName}" debe ser uno de los siguientes valores: ${enumValues.join(', ')}`);
+}

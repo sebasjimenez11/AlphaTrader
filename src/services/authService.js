@@ -30,7 +30,11 @@ class AuthService {
     }
 
     const token = generateToken(user);
-    return { token, message: "Usuario logueado con éxito" };
+    return {
+      token,
+      message: "Usuario logueado con éxito",
+      data: { fullName: user.FullName, profilePicture: user.profilePicture }
+    };
   }
 
   /**

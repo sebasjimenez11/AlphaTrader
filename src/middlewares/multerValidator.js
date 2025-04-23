@@ -20,23 +20,13 @@ const storage = multer.diskStorage({
     cb(null, uploadDir); // Usar el directorio definido
   },
   filename: (req, file, cb) => {
-    // Usamos Date.now() y el ID del usuario para asegurar nombres únicos y mantenemos la extensión original
-    // Nota: req.user debería estar disponible aquí si verifyToken se ejecuta antes que Multer
-    // Si no, usa un prefijo genérico como `image-${Date.now()}`
-    const userId = req.user ? req.user.id : 'unknown'; // Fallback si req.user no está disponible (aunque no debería pasar)
+    const userId = req.tokenId ? req.tokenId : 'unknown';
     cb(null, `profile-${userId}-${Date.now()}${path.extname(file.originalname)}`);
   }
 });
 
 // Filtro para permitir solo ciertos tipos de archivos (imágenes)
 const fileFilter = (req, file, cb) => {
-  // Verificar si req.user está disponible si el nombre de archivo depende de ello
-   if (!req.user) {
-      // Este caso idealmente no debería ocurrir si verifyToken se ejecuta primero,
-      // pero es una buena práctica tenerlo en cuenta.
-      return cb(new Error('Autenticación requerida para la subida de archivo.'), false);
-   }
-
   if (file.mimetype.startsWith('image/')) {
     cb(null, true); // Aceptar el archivo
   } else {

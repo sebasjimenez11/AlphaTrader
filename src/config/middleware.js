@@ -14,7 +14,6 @@ const RedisStore = connectRedis(session);
  * @param {object} redisClient - El cliente de Redis conectado.
  */
 const setupMiddlewares = (app, redisClient) => {
-  console.log("⚙️ Configurando Middlewares...");
 
   // Configurar CORS
   app.use(cors({
@@ -46,8 +45,6 @@ const setupMiddlewares = (app, redisClient) => {
   app.use(passport.initialize());
   // Usar passport.session() DESPUÉS de express-session
   app.use(passport.session());
-
-  console.log("✅ Middlewares configurados");
 };
 
 export default setupMiddlewares;

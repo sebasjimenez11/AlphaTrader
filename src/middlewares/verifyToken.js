@@ -14,9 +14,8 @@ const verifyToken = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.tokenId = decoded.ID;
-    req.tokenEmail = decoded.Email;
-    
+    req.tokenId = decoded.id;
+    req.tokenEmail = decoded.email;
     next();
   } catch (error) {
     console.error('Error al verificar el token:', error.message);

@@ -1,22 +1,26 @@
-import AppError from "../utils/appError";
+import AppError from "../utils/appError.js";
 export default class PreferencesProfileService {
-    constructor(PreferencesProfileRepository, coingecoRepository) {
+    constructor(PreferencesProfileRepository, CoinGeckoAdapter) {
         this.PreferencesProfileRepository = PreferencesProfileRepository;
-        this.coingecoRepository = coingecoRepository;
+        this.CoinGeckoAdapter = CoinGeckoAdapter;
     }
 
     async getCoinsList() {
-        const coinList = await this.coingecoRepository.coinsList();
+        const coinList = await this.CoinGeckoAdapter.coinsList();
         if (!coinList) {
             throw new AppError('Error al obtener la lista de monedas', 500);
         }
-
+        
         const coins = coinList.map(coin => ({
-            id: coin.id,
-            name: coin.name
+            name: coin.Id,
+            symbol: coin.symbolo
         }));
 
-        return coins;
+        return {
+            status: true,
+            message: 'Lista de monedas obtenida correctamente',
+            data: coins
+        };
     }
 
     async getPreferencesProfile(userId) {
@@ -29,16 +33,30 @@ export default class PreferencesProfileService {
             };
         }
 
-        return preferencesProfile;
+        return {
+            status: true,
+            message: "Perfil de preferencias encontrado correctamente",
+            data: preferencesProfile
+        };
     }
 
     async createPreferencesProfile(data) {
+        const { userId } = data;
+        const profile = await this.PreferencesProfileRepository.findByuserID(userId);
+        if (profile) {
+            throw new AppError('El perfil de preferencias ya existe', 400);
+        }
+
         const preferencesProfile = await this.PreferencesProfileRepository.create(data);
         if (!preferencesProfile) {
             throw new AppError('Error al crear el perfil de preferencias', 500);
         }
 
-        return preferencesProfile;
+        return {
+            status: true,
+            message: 'Perfil de preferencias creado correctamente',
+            data: preferencesProfile
+        };
     }
     async updatePreferencesProfile(userId, data) {
         const preferencesProfile = await this.PreferencesProfileRepository.updateByUserId(userId, data);
@@ -46,7 +64,11 @@ export default class PreferencesProfileService {
             throw new AppError('Error al actualizar el perfil de preferencias', 500);
         }
 
-        return preferencesProfile;
+        return {
+            status: true,
+            message: 'Perfil de preferencias actualizado correctamente',
+            data: preferencesProfile
+        };
     }
 
     async deletePreferencesProfile(userId) {
@@ -55,6 +77,10 @@ export default class PreferencesProfileService {
             throw new AppError('Error al eliminar el perfil de preferencias', 500);
         }
 
-        return preferencesProfile;
+        return {
+            status: true,
+            message: 'Perfil de preferencias eliminado correctamente',
+            data: preferencesProfile
+        };
     }
 }

@@ -15,8 +15,8 @@ class UserController {
   async completeProfile(req, res) {
     // Suponiendo que el email viene autenticado en req.user
     const { email } = req.user;
-    const { fullName, dateOfBirth } = req.body;
-    const updatedUser = await this.userService.completeUserProfile(email, { fullName, dateOfBirth });
+    const { fullName, dateOfBirth, acceptedTerms } = req.body;
+    const updatedUser = await this.userService.completeUserProfile(email, { fullName, dateOfBirth, acceptedTerms});
     res.status(201).json({ status: true, user: updatedUser });
   }
 

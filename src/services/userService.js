@@ -33,7 +33,7 @@ class UserService {
     return { token };
   }
 
-  async completeUserProfile(email, { fullName, dateOfBirth }) {
+  async completeUserProfile(email, { fullName, dateOfBirth,acceptedTerms}) {
     const user = await this.userRepository.findByEmail(email);
     if (!user) {
       throw new AppError('Usuario no encontrado', 404);
@@ -42,11 +42,15 @@ class UserService {
       throw new AppError('El perfil ya está completo', 400);
     }
 
+    user.acceptedTerms = acceptedTerms
     user.DateOfBirth = dateOfBirth;
 
     user.Status = true;
     await user.save();
-    return user;
+
+    const token = generateToken(user);
+
+    return user.profilePicture, user.FullName, token;
   }
 
   async uploadProfileImage(userEmail, userId, file) {

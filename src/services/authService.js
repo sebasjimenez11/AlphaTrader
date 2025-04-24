@@ -167,7 +167,7 @@ class AuthService {
       const newUser = {
         ID: getId(), // Generar ID como en tu código original
         Email: email,
-        Name: name,
+        FullName: name,
         Status: true,
       };
 

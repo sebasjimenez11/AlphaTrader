@@ -10,11 +10,18 @@ class AuthController {
     res.status(200).json({ status: true, ...result });
   }
 
-  async oauthCallback(req, res, next) {
-    // Passport coloca el usuario autenticado en req.user
+
+async oauthCallback(req, res, next) {
+  try {
     const result = await this.authService.findOrCreateByOAuth(req.user);
-    res.status(200).json({ status: true, ...result });
+    const { token, user } = result;
+
+    res.redirect(`http://localhost:5173/auth/google/success?token=${token}`);
+
+  } catch (error) {
+    console.error("Error en oauthCallback:", error);
   }
+}
 
   async recoverPassword(req, res) {
     const { success, message } = await this.authService.recoverPassword(req.body);

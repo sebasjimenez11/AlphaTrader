@@ -105,7 +105,7 @@ class CoinGeckoAdapter {
           price_change_percentage_24h: null,
           binance_symbol: (asset + "USDT").toUpperCase() // Símbolo de Binance se deriva aquí
         };
-        return formatCoinData(coin); // Retorna el objeto crudo
+        return coin; // Retorna el objeto crudo
       });
       return list;
     } catch (error) {

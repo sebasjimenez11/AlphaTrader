@@ -6,7 +6,12 @@ import { io } from "socket.io-client";
 //   timeout: 20000, // Tiempo de espera antes de considerar que la conexión ha fallado
 // });
 
-const socket = io("http://localhost:10101");
+const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTQ1NDMzNCwiZXhwIjoxNzQ1NDU3OTM0fQ.muLlvfqq3iqKXgxUQnh7huvEu-TcfLaNn9BgAeYECdw";
+const socket = io("http://localhost:10101", {
+  auth: {
+    token: `${token}`
+  }
+});
 
 
 socket.on("connect", () => {

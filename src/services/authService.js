@@ -25,7 +25,6 @@ class AuthService {
     const user = await this.userRepository.findByEmail(Email);
 
     if (!user || !(await bcrypt.compare(Password, user.Password))) {
-      console.warn(`[AuthService - Login] Failed login attempt for email: ${Email} - Invalid credentials`);
       throw new AppError("Usuario o contraseña incorrectos", 404); // Usando 404 como en tu código original
     }
 
@@ -53,7 +52,7 @@ class AuthService {
       throw new AppError("Usuario no encontrado", 404); // Manteniendo el comportamiento original del código
     }
 
-    const { email: UserEmail, fullName: UserFullName } = user;
+    const { Email: UserEmail, FullName: UserFullName } = user;
     const { token, expiresAt } = generateTokenRecovery();
 
     const frontendUrl = process.env.FRONTEND_URL; // Asumimos que FRONTEND_URL está configurado en variables de entorno

@@ -10,13 +10,14 @@ export const sendMailViaWorker = async (mail, type, userName, urlToken = "") => 
             to: mail,
             templateData: {
                 Usuario: userName,
-                btnUrl: urlToken
+                btnUrl: urlToken,
             },
             from: process.env.WORKER_EMAIL
         });
         return response.data;
     } catch (error) {
         console.error("Error al enviar el correo", error);
+        // throw new AppError("Error al enviar el correo", 500);
     }
 };
 

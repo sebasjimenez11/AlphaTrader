@@ -11,7 +11,6 @@ export const registerValidator = () => [
 
 
 export const completeProfileValidator = () => [
-  validators.validateStringField('FullName'),
    validators.validateDateField('dateOfBirth'),
   validators.validateAcceptedTermsField('acceptedTerms'),
 

@@ -1,5 +1,5 @@
-import PasswordResetToken from "../database/models/tokensRecovery";
-import User from "../database/models/user";
+import PasswordResetToken from "../database/models/tokensRecovery.js";
+import User from "../database/models/user.js";
 
 class PasswordResetTokenRepository {
     createToken = async (data) => await PasswordResetToken.create(data);
@@ -13,4 +13,4 @@ class PasswordResetTokenRepository {
     updateToken = async (token, data) => await PasswordResetToken.update(data, { where: { token } });
 }
 
-export default new PasswordResetTokenRepository();
+export default PasswordResetTokenRepository;

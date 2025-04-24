@@ -16,7 +16,7 @@ async oauthCallback(req, res, next) {
     const result = await this.authService.findOrCreateByOAuth(req.user);
     const { token, user } = result;
 
-    res.redirect(`http://localhost:5173/auth/google/success?token=${token}`);
+    res.redirect(`${process.env.FRONTEND_URL}/auth/google/success?token=${token}`);
 
   } catch (error) {
     console.error("Error en oauthCallback:", error);

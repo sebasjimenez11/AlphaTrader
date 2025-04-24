@@ -8,10 +8,12 @@ import { loginValidator, passwordChange, recoveryPassword } from "../middlewares
 import validationErrors from "../middlewares/validationResult.js";
 import catchAsync from "../utils/catchAsync.js";
 import PasswordResetToken from "../database/models/tokensRecovery.js";
+import PasswordResetTokenRepository from "../repositories/PasswordResetTokenRepository.js";
 
 const router = express.Router();
 
-const authService = new AuthService(UserRepository, PasswordResetToken);
+const passwordResetTokenRepository = new PasswordResetTokenRepository();
+const authService = new AuthService(UserRepository, passwordResetTokenRepository);
 const authController = new AuthController(authService);
 
 // Ruta de login con validación

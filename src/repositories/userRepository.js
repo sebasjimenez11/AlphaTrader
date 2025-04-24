@@ -14,8 +14,24 @@ class UserRepository {
   }
 
   async updateById(id, data) {
-    return await User.update(data, { where: { ID: id } });
+    const includes = []; // Puedes agregar relaciones si necesitas, como { model: Role } por ejemplo
+
+    const [numberOfAffectedRows] = await User.update(data, {
+      where: { ID: id },
+    });
+
+    if (numberOfAffectedRows === 0) {
+      return null; // No se encontró el usuario con ese ID
+    }
+
+    const updatedUser = await User.findOne({
+      where: { ID: id },
+      include: includes,
+    });
+
+    return updatedUser;
   }
+
 
   async deleteUser(id) {
     return await User.destroy({ where: { ID: id } });

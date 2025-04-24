@@ -53,3 +53,15 @@ export function formatHistoricalCandle(candle, symbol = null) {
     };
 }
 
+/**
+ * Convierte un arreglo de items formateados en un objeto, usando la llave que se indique.
+ * Por ejemplo, usando "symboloBinance" se crea: { BTCUSDT: { ... }, ETHUSDT: { ... } }
+ */
+export function arrayToObjectByKey(array, key = "symboloBinance") {
+    return array.reduce((acc, item) => {
+        if (item[key]) {
+            acc[item[key]] = item;
+        }
+        return acc;
+    }, {});
+}

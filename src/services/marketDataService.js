@@ -2,12 +2,14 @@ import marketDataAdapter from "../adapters/marketDataAdapter.js";
 import CoinGeckoAdapter from "../adapters/coingeckoAdapter.js";
 import RedisRepository from "../repositories/redisRepository.js";
 import AppError from "../utils/appError.js";
+import PreferencesProfileRepository from "../repositories/preferencesProfileRepository.js";
 
 class MarketDataService {
     constructor() {
         this.redisRepository = new RedisRepository();
         this.marketDataAdap = new marketDataAdapter(this.redisRepository);
         this.CoinGeckoAdap = new CoinGeckoAdapter(this.redisRepository);
+        this.preferenceRepository = new PreferencesProfileRepository();
     }
 
     // 1. Obtener datos en vivo de las monedas principales
@@ -92,6 +94,38 @@ class MarketDataService {
         } catch (error) {
             throw new AppError(error.message, 505);
         }
+    }
+
+    async getLiveDataWithPreferences(idUser, socket) {
+      try {
+        const {coins} = await this.preferenceRepository.findByuserID(idUser) ?? {coins: []};
+
+        if (coins.length === 0) {
+          return { dataCoinsPreference: [], coins };
+        }
+
+        const mainCoins = await this.CoinGeckoAdap.coinsRanking();
+        const dataCoinsPreference = mainCoins.filter(coin => coins.includes(coin.symbol));
+        const symbols = dataCoinsPreference.map(coin => coin.binance_symbol);
+
+        const updateListener = (coinData) => {
+          socket.emit("liveDataWithPreferences", coinData);
+        };
+
+        this.marketDataAdap.eventEmitter.on("marketDataUpdate", updateListener);
+        const ws = this.marketDataAdap.subscribeToMultipleMarketUpdates(symbols);
+
+        socket.on("disconnect", () => {
+          this.marketDataAdap.eventEmitter.removeListener("marketDataUpdate", updateListener);
+          if (ws && ws.readyState === ws.OPEN) {
+            ws.close();
+          }
+        });
+
+        return { dataCoinsPreference, coins };
+      } catch (error) {
+        throw new AppError(error.message, 505);
+      }
     }
 }
 

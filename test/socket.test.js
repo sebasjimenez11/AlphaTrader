@@ -5,7 +5,7 @@ import { io } from "socket.io-client";
 //   reconnectionAttempts: 5, // Número de intentos de reconexión
 //   timeout: 20000, // Tiempo de espera antes de considerar que la conexión ha fallado
 // });
-const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTQ1ODg1MCwiZXhwIjoxNzQ1NDYyNDUwfQ.4kSgDHictSaqEM1YQRF9bYxxqk-AJNSDFX5T-FNRXqM";
+const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTQ5MTMyNSwiZXhwIjoxNzQ1NDk0OTI1fQ.Ub7BS0Ocsh6FsFKwMvrj14_kYhEIexYChG6GPG0k1l4";
 const socket = io("http://localhost:10101", {
   auth: {
     token: `bearer ${token}`
@@ -16,7 +16,9 @@ socket.on("connect", () => {
   console.log("Conectado al servidor con ID:", socket.id);
 
   // Solicitar principales criptomonedas en vivo
-  socket.emit("getMainCoinsLiveData");
+  // socket.emit("getMainCoinsLiveData");
+
+  socket.emit("getLiveDataWithPreferences");
 
   // Solicitar monedas secundarias en vivo
   // socket.emit("getSecondaryCoinsLiveData");
@@ -54,6 +56,14 @@ socket.on("mainCoinsLiveUpdate", (data) => {
 
 socket.on("error", (error) => {
   console.error("Error recibido:", error);
+});
+
+socket.on("liveDataWithPreferences", (data) => {
+  console.log("Datos de preferencias:", data);
+});
+
+socket.on("dataWithPreferences", (data) => {
+  console.log("Datos de preferencias:", data);
 });
 
 socket.on("disconnect", () => {

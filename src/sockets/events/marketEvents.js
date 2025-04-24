@@ -42,6 +42,20 @@ const handleConversionData = async (socket, data) => {
   }
 };
 
+const handleLiveDataWithPreferences = async (socket, data) => {
+  try {
+    // en lugar de leerlo de data, lo tomas de lo que puso el middleware:
+    const idUser = socket.tokenId;
+    
+    const result = await marketDataService.getLiveDataWithPreferences(idUser, socket);
+    socket.emit("dataWithPreferences", result);
+  } catch (error) {
+    console.error("Error en getLiveDataWithPreferences:", error.message);
+    socket.emit("error", { message: error.message });
+  }
+};
+
+
 const marketEvents = (socket, io) => {
   socket.on("getMainCoinsLiveData", (data) => {
     handleMainCoinsLiveData(socket, data);
@@ -57,6 +71,10 @@ const marketEvents = (socket, io) => {
 
   socket.on("getConversionData", (data) => {
     handleConversionData(socket, data);
+  });
+
+  socket.on("getLiveDataWithPreferences", (data) => {
+    handleLiveDataWithPreferences(socket, data);
   });
 };
 

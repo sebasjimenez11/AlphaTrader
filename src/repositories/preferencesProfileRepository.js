@@ -44,4 +44,8 @@ export default class PreferencesProfileRepository {
         // Asumiendo que 'userId' es la columna correcta para buscar
         return await PreferencesProfile.destroy({ where: { userId: userId } });
     }
+
+    async findByCoinsPrefenrenceByUserId(userId) {
+        return await PreferencesProfile.findOne({ where: { userId }, include: ['coins'] });
+    }
 }

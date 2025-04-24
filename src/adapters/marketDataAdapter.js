@@ -134,9 +134,7 @@ class marketDataAdapter {
       const validSymbols = symbols
         .map(s => {
           const lower = s.toLowerCase();
-          // Reemplaza el sufijo "tusd" por "usdt"
           const fixed = lower.replace(/tusd$/, "usdt");
-          // Asegura que termine en "usdt"
           return fixed.endsWith("usdt") ? fixed : fixed + "usdt";
         })
         .filter(s => /^[a-z0-9]+usdt$/.test(s));
@@ -145,44 +143,85 @@ class marketDataAdapter {
         throw new Error("No se han proporcionado símbolos válidos para Binance.");
       }
 
-      // Construir la cadena de streams
+      // Construir la URL de streams
       const streams = validSymbols.map(s => `${s}@miniTicker`).join("/");
       const wsUrl = `${this.binanceWsUrl}/stream?streams=${streams}`;
 
       const ws = new WebSocket(wsUrl);
       const marketData = {};
+      const lastEmitted = {}; // guarda el último dato emitido por símbolo
 
-      ws.on("open", () => console.log("Conectado a Binance WebSocket [Múltiples]"));
+      ws.on("open", () =>
+        console.log("Conectado a Binance WebSocket [Múltiples]")
+      );
 
       // Procesamiento con throttling de 200ms (5 mensajes/segundo)
       const processMessageThrottled = this.throttle(async (data) => {
         try {
           const parsed = JSON.parse(data);
-          const coinDataRaw = parsed.data;
-          const coinData = formatLiveUpdate(coinDataRaw);
-          marketData[coinDataRaw.s] = coinData;
+          const coinRaw = parsed.data;
+          const coin = formatLiveUpdate(coinRaw);
+          const key = coinRaw.s;
 
-          await this.redisRepository.set(`marketData:realtime:${coinDataRaw.s}`, coinData, 60);
-          this.eventEmitter.emit("marketDataUpdate", Object.values(marketData));
+          // Solo emitir si cambió precio o volumen
+          const prev = lastEmitted[key];
+          if (
+            !prev ||
+            prev.Precio !== coin.Precio ||
+            prev.Volumen !== coin.Volumen
+          ) {
+            lastEmitted[key] = coin;
+            marketData[key] = coin;
+
+            await this.redisRepository.set(
+              `marketData:realtime:${key}`,
+              coin,
+              60
+            );
+            this.eventEmitter.emit(
+              "marketDataUpdate",
+              Object.values(marketData)
+            );
+          }
         } catch (err) {
           console.error("Error procesando mensaje:", err);
         }
       }, 200);
 
-      ws.on("message", (data) => {
-        processMessageThrottled(data);
-      });
+      ws.on("message", data => processMessageThrottled(data));
 
-      ws.on("error", (err) => {
-        console.error("Error en WebSocket:", err);
-      });
-
+      ws.on("error", err => console.error("Error en WebSocket:", err));
       ws.on("close", () => console.log("WebSocket cerrado [Múltiples]"));
 
       return ws;
     } catch (error) {
       throw new AppError(error.message, 505);
     }
+  }
+
+
+  subscribeToCandlestickUpdates(symbol, interval) {
+    const stream = `${symbol.toLowerCase()}@kline_${interval}`;
+    const ws = new WebSocket(`${this.binanceWsUrl}/ws/${stream}`);
+    ws.on("open", () => console.log(`Conectado a velas ${symbol} @ ${interval}`));
+
+    ws.on("message", raw => {
+      const { k } = JSON.parse(raw).data;
+      if (k.x) {  // vela cerrada
+        const candle = {
+          openTime: k.t, open: k.o, high: k.h,
+          low: k.l, close: k.c, volume: k.v, closeTime: k.T
+        };
+        const formatted = formatHistoricalCandle(candle, symbol);
+        // guardar en cache opcional:
+        this.redisRepository.set(`candles:${symbol}:${interval}`, formatted, 3600);
+        this.eventEmitter.emit("candlestickUpdate", { symbol, interval, candle: formatted });
+      }
+    });
+
+    ws.on("error", err => console.error("WS candlestick error:", err));
+    ws.on("close", () => console.log(`WS candlestick cerrado: ${symbol}@${interval}`));
+    return ws;
   }
 
 

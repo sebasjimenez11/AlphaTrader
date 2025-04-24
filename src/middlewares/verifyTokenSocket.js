@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 
 const verifySocketToken = (socket, next) => {
-  const token = socket.handshake.auth.token || socket.handshake.headers['authorization']?.split(' ')[1];
+  const token = socket.handshake.auth.token.split(' ')[1];
 
   if (!token) {
     return next(new Error('Token no proporcionado o inválido'));

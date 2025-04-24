@@ -1,7 +1,6 @@
 import axios from "axios";
 import AppError from "../utils/appError.js";
-import { formatCoinData } from "../utils/coinDataFormatter.js";
-
+import { formatCoinData, arrayToObjectByKey } from "../utils/coinDataFormatter.js";
 class CoinGeckoAdapter {
   constructor(redisRepository) {
     this.redisRepository = redisRepository;
@@ -15,13 +14,12 @@ class CoinGeckoAdapter {
   async getBinanceCoins() {
     try {
       // Intentar obtener desde Redis
-      // NOTA: Si estás seguro de que la data de Redis está dañada,
-      // puedes comentar temporalmente esta sección para forzar la obtención desde la API
       let binanceCoins = await this.redisRepository.get('binanceCoins');
-      if (binanceCoins && Array.isArray(binanceCoins) && binanceCoins.length > 0) {
+      if (binanceCoins && binanceCoins.length > 0) {
         return new Set(binanceCoins);
       }
 
+      // Utilizamos el endpoint de Binance para obtener la información de intercambio
       const response = await axios.get('https://api.binance.com/api/v3/exchangeInfo');
       const symbols = response.data.symbols;
       // Extraemos el campo baseAsset de cada par y lo convertimos a minúsculas para normalizar
@@ -31,19 +29,13 @@ class CoinGeckoAdapter {
       await this.redisRepository.set('binanceCoins', Array.from(binanceCoins), 3600);
       return binanceCoins;
     } catch (e) {
-      console.error("Error in getBinanceCoins:", e.message, e.stack);
-      // Decide si quieres lanzar el error o retornar un Set vacío para permitir que coinsList continúe
-      // Lanzar el error es más estricto. Retornar vacío permite que coinsList intente con CoinGecko.
-      // throw new AppError(`Error al obtener monedas de Binance: ${e.message}`, 505);
-      console.warn("Returning empty Set for Binance coins due to error");
-      return new Set(); // Return empty set on error
+      throw new AppError(`Error al obtener monedas de Binance: ${e.message}`, 505);
     }
   }
 
 
   /**
    * Obtiene la lista de monedas desde CoinGecko (market data) para la página 1.
-   * Retorna datos crudos, formatCoinData se aplica en coinsList.
    */
   async getCoinListFromCoinGecko() {
     try {
@@ -56,7 +48,6 @@ class CoinGeckoAdapter {
           sparkline: false,
         },
       });
-      // Retorna los datos mapeados directamente, formatCoinData se aplicará después
       return response.data.map(coin => ({
         id: coin.id,
         symbol: coin.symbol.toLowerCase(),
@@ -72,29 +63,23 @@ class CoinGeckoAdapter {
         binance_symbol: (coin.symbol + 'usdt').toLowerCase(),
       }));
     } catch (error) {
-      console.error("Error in getCoinListFromCoinGecko:", error.message, error.stack);
-      // Decide si lanzar el error o retornar un array vacío
-      // throw new AppError(`Error al obtener coins de CoinGecko: ${error.message}`, 505);
-      console.warn("Returning empty array for CoinGecko coins due to error");
-      return []; // Return empty array on error
+      throw new AppError(`Error al obtener coins de CoinGecko: ${error.message}`, 505);
     }
   }
 
   /**
    * Obtiene la lista de monedas disponibles en Binance utilizando la API oficial de Binance.
-   * Retorna datos crudos, formatCoinData se aplica en coinsList.
    */
   async getCoinListFromBinance() {
     try {
       const response = await axios.get('https://api.binance.com/api/v3/exchangeInfo');
       const symbols = response.data.symbols;
       const assets = Array.from(new Set(symbols.map(item => item.baseAsset.toLowerCase())));
-      // Retorna los datos mapeados directamente, NO llama formatCoinData aquí
       const list = assets.map(asset => {
         const coin = {
-          id: asset, // Usando asset como id para coins solo en Binance
+          id: asset,
           symbol: asset,
-          name: asset.toUpperCase(), // Binance list podría no tener nombres, usa símbolo en mayúsculas
+          name: asset.toUpperCase(),
           image: null,
           market_cap: null,
           market_cap_rank: null,
@@ -103,23 +88,48 @@ class CoinGeckoAdapter {
           high_24h: null,
           low_24h: null,
           price_change_percentage_24h: null,
-          binance_symbol: (asset + "USDT").toUpperCase() // Símbolo de Binance se deriva aquí
+          binance_symbol: (asset + "USDT").toUpperCase()
         };
-        return coin; // Retorna el objeto crudo
+        return formatCoinData(coin);
       });
       return list;
     } catch (error) {
-      console.error("Error in getCoinListFromBinance:", error.message, error.stack);
-      // Decide si lanzar el error o retornar un array vacío
-      // throw new AppError(`Error al obtener coins de Binance: ${error.message}`, 505);
-      console.warn("Returning empty array for Binance assets due to error");
-      return []; // Return empty array on error
+      throw new AppError(`Error al obtener coins de Binance: ${error.message}`, 505);
     }
   }
 
   /**
-   * Obtiene una lista de monedas disponibles combinando datos de CoinGecko y Binance.
-   * formatCoinData se aplica aquí.
+   * Obtiene la lista de monedas desde CryptoCompare.
+   */
+  async coinsRanking() {
+    try {
+      let rankingCoins = await this.redisRepository.get('coinsRanking');
+      if (rankingCoins && Array.isArray(rankingCoins) && rankingCoins.length > 0) {
+        return rankingCoins;
+      }
+
+      const response = await axios.get(`${this.baseUrl}/coins/markets`, {
+        params: {
+          vs_currency: 'usd',
+          order: 'market_cap_desc',
+          per_page: 50,
+          page: 1,
+          sparkline: false,
+        },
+      });
+
+      const coins = response.data || [];
+      const filteredCoins = coins.slice(0, 20).map(coin => formatCoinData(coin));
+
+      await this.redisRepository.set('coinsRanking', filteredCoins, 60);
+      return filteredCoins;
+    } catch (e) {
+      throw new AppError(`Error al obtener el ranking de monedas: ${e.message}`, 505);
+    }
+  }
+
+  /**
+   * Obtiene una lista de monedas disponibles combinando datos de CoinGecko, Binance y CryptoCompare.
    * Se almacena en caché en Redis por 300 segundos.
    */
   async coinsList() {
@@ -149,12 +159,10 @@ class CoinGeckoAdapter {
       throw new AppError(`Error al obtener la lista de monedas: ${e.message}`, 505);
     }
   }
-
-
   /**
-     * Obtiene el ranking de las principales 10 monedas por capitalización de mercado que están disponibles en Binance.
-     * Se almacena en caché en Redis por 60 segundos.
-     */
+   * Obtiene el ranking de las principales 10 monedas por capitalización de mercado que están disponibles en Binance.
+   * Se almacena en caché en Redis por 60 segundos.
+   */
   async coinsRanking() {
     try {
       let rankingCoins = await this.redisRepository.get('coinsRanking');
@@ -197,26 +205,22 @@ class CoinGeckoAdapter {
       throw new AppError(`Error al obtener el ranking de monedas: ${e.message}`, 505);
     }
   }
+
   /**
    * Obtiene información detallada de una moneda específica por su ID.
    * Primero busca en la lista almacenada en caché; si no la encuentra, consulta la API de CoinGecko.
    */
   async coinById(coinId) {
     try {
-      // Obtiene la lista completa de coins (que debe estar formateada)
-      // Llama a coinsList para asegurar que se obtiene la versión más reciente (cacheada o generada)
-      const coinsList = await this.coinsList();
-
-      if (coinsList && Array.isArray(coinsList) && coinsList.length > 0) {
-        // Busca en el array. Asumiendo que formatCoinData usa una propiedad llamada 'Id'.
-        const foundCoin = coinsList.find(coin =>
-          coin && coin.Id && coin.Id.toLowerCase() === coinId.toLowerCase()
-        );
-        if (foundCoin) {
-          return foundCoin;
+      const coinsList = await this.redisRepository.get('coinsList');
+      if (coinsList && Object.keys(coinsList).length > 0) {
+        // Como coinsList es ahora un objeto de objetos, se itera para encontrar la coin
+        for (const key in coinsList) {
+          if (coinsList[key].Id.toLowerCase() === coinId.toLowerCase()) {
+            return coinsList[key];
+          }
         }
       }
-
       const response = await axios.get(`${this.baseUrl}/coins/${coinId}`, {
         params: {
           localization: false,
@@ -228,24 +232,11 @@ class CoinGeckoAdapter {
         },
       });
       const coin = response.data;
-      // Asegura que el binance_symbol se añada si no existe (o confía en formatCoinData)
-      if (!coin.binance_symbol && coin.symbol) {
-        coin.binance_symbol = (coin.symbol + "USDT").toUpperCase();
-      }
-      // Aplica formatCoinData a la coin individual obtenida de la API
-      const formattedCoin = formatCoinData(coin);
-      return formattedCoin;
+      // Aseguramos el símbolo de Binance
+      coin.binance_symbol = (coin.symbol + "USDT").toUpperCase();
+      return formatCoinData(coin);
     } catch (e) {
-      console.error(`Error in coinById(${coinId}):`, e.message, e.stack);
-      // Si la llamada a la API falla (ej. 404 Not Found), atrapamos el error
-      if (axios.isAxiosError(e) && e.response && e.response.status === 404) {
-        throw new AppError(`Coin with ID '${coinId}' not found`, 404);
-      }
-      // Si formatCoinData lanza un error
-      if (e instanceof Error && e.message.includes("formatCoinData")) { // Ajusta si tu error de formato es diferente
-        throw new AppError(`Error formatting data for coin '${coinId}': ${e.message}`, 500); // O un código apropiado
-      }
-      throw new AppError(`Error al obtener detalles de la moneda '${coinId}': ${e.message}`, 505);
+      throw new AppError(e.message, 505);
     }
   }
 
@@ -254,24 +245,21 @@ class CoinGeckoAdapter {
    */
   async coinsBySymbol(symbol) {
     try {
-      // Obtiene la lista completa de coins (que debe estar formateada)
-      const coinsList = await this.coinsList();
-
-      let filtered = [];
-      if (coinsList && Array.isArray(coinsList) && coinsList.length > 0) {
-        // Filtra el array. Usando la propiedad 'symbolo' que formatCoinData parece crear/usar.
-        // NOTA IMPORTANTE: Verifica en tu archivo formatCoinData.js si realmente cambia 'symbol' a 'symbolo'.
-        // Si no lo hace, deberías usar 'coin.symbol' aquí. Asumo 'symbolo' por tu código anterior.
-        filtered = coinsList.filter(coin =>
-          coin && coin.symbolo && typeof coin.symbolo === 'string' && coin.symbolo.toLowerCase().includes(symbol.toLowerCase())
+      const coinsList = await this.redisRepository.get('coinsList');
+      let filtered;
+      if (coinsList && Object.keys(coinsList).length > 0) {
+        filtered = Object.values(coinsList).filter(coin =>
+          coin.symbolo.toLowerCase().includes(symbol.toLowerCase())
+        );
+      } else {
+        const allCoins = await this.coinsList();
+        filtered = Object.values(allCoins).filter(coin =>
+          coin.symbolo.toLowerCase().includes(symbol.toLowerCase())
         );
       }
-
-      // arrayToObjectByKey espera un array y lo convierte.
-      return arrayToObjectByKey(filtered); // Asumiendo que arrayToObjectByKey funciona correctamente
+      return arrayToObjectByKey(filtered);
     } catch (e) {
-      console.error(`Error in coinsBySymbol(${symbol}):`, e.message, e.stack);
-      throw new AppError(`Error al buscar monedas por símbolo '${symbol}': ${e.message}`, 505);
+      throw new AppError(e.message, 505);
     }
   }
 
@@ -303,38 +291,15 @@ class CoinGeckoAdapter {
           vs_currencies: moneda
         }
       });
-
-      // Verifica que la respuesta contenga los datos esperados
-      if (!response.data || !response.data[cryptoId] || response.data[cryptoId][moneda] === undefined) {
-        console.warn(`No se encontró precio para ${cryptoId} en ${fiatCurrency}. Response data:`, response.data);
-        throw new AppError(`Could not find price for crypto ID '${cryptoId}' in currency '${fiatCurrency}'`, 404);
-      }
-
       const precio = response.data[cryptoId][moneda];
       const resultado = cantidadCrypto * precio;
 
+      if (isNaN(resultado)) {
+        throw new AppError('Recurso no encontrado', 404);
+      }
       return resultado;
     } catch (error) {
-      console.error("Error in convertirCryptoAmoneda:", error.message, error.stack);
-      // Manejo de errores Axios
-      if (axios.isAxiosError(error)) {
-        if (error.response) {
-          // Errores de respuesta HTTP (ej. 404 de CoinGecko si la coin/moneda no existe)
-          throw new AppError(`API Error converting crypto: ${error.response.status} ${error.response.statusText} - ${error.message}`, error.response.status);
-        } else if (error.request) {
-          // Error de red (no se recibió respuesta)
-          throw new AppError(`Network Error converting crypto: ${error.message}`, 500); // O un código apropiado
-        } else {
-          // Algo pasó al configurar la petición
-          throw new AppError(`Request Setup Error converting crypto: ${error.message}`, 500);
-        }
-      }
-      // Si es nuestro custom AppError desde el check 404 de arriba, lo relanza
-      if (error instanceof AppError) {
-        throw error;
-      }
-      // Manejo de errores generales no previstos
-      throw new AppError(`Error converting crypto to fiat: ${error.message}`, 505);
+      throw new AppError(error.message, 505);
     }
   }
 }

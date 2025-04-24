@@ -1,8 +1,3 @@
-// src/sockets/socketServer.js
-import { Server as SocketIOServer } from "socket.io";
-import marketEvents from "./events/marketEvents.js";
-import verifySocketToken from "../middlewares/verifyTokenSocket.js"; 
-
 class SocketServer {
   constructor(httpServer) {
     this.io = new SocketIOServer(httpServer, {
@@ -16,7 +11,6 @@ class SocketServer {
     this.io.on("connection", async (socket) => {
       console.log(`Cliente conectado: ${socket.id} (email: ${socket.tokenEmail})`);
 
-      // Eventos específicos del mercado
       marketEvents(socket, this.io);
 
       socket.on("disconnect", () => {
@@ -32,6 +26,8 @@ class SocketServer {
   emit(event, data) {
     this.io.emit(event, data);
   }
-}
 
-export default SocketServer;
+  emitErrorToAll(message) {
+    this.io.emit("serverError", { message });
+  }
+}

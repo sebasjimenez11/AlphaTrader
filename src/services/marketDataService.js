@@ -127,6 +127,6 @@ class MarketDataService {
         throw new AppError(error.message, 505);
       }
     }
-}
+}   
 
 export default new MarketDataService();

@@ -60,6 +60,8 @@ class AuthService {
       console.error("[AuthService - RecoverPassword] Error: FRONTEND_URL environment variable not configured.");
       throw new AppError("Error interno al construir el enlace de recuperación.", 500);
     }
+
+    console.log(token);
     const url = `${frontendUrl}/recover-password?token=${token}&expiresAt=${expiresAt.toISOString()}&email=${encodeURIComponent(UserEmail)}`; // Usar ISO string para la fecha, codificar el email
 
 

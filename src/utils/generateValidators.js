@@ -152,7 +152,7 @@ export const validateTokenField = (fieldName) => {
     .withMessage('El token es requerido')
     .isString()
     .withMessage('El token debe ser una cadena de texto')
-    .isLength({ min: 32, max: 32 })
+    .isLength({ min: 32, max: 50 })
     .withMessage('Token inválido')
     .matches(/^[A-Za-z0-9_-]+$/)
     .withMessage('Formato de token inválido')

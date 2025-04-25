@@ -12,8 +12,8 @@ export default class PreferencesProfileService {
         }
         
         const coins = coinList.map(coin => ({
-            name: coin.Id,
-            symbol: coin.symbolo
+            name: coin.id,
+            symbol: coin.symbol
         }));
 
         return {

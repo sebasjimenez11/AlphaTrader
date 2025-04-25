@@ -36,6 +36,14 @@ const coinDetailWithHistoryRange = async (socket, data) => {
   }
 }
 
+const handleCoinDetailPreferences = async (socket, data) => {
+  try {
+    await marketDataService.getCoinDetailPreferences(socket, data);
+  } catch (error) {
+    console.error(`[${socket.id}] Error procesando getCoinDetailPreferences:`, error.message);
+  }
+};
+
 const handleLiveDataWithPreferences = async (socket, data) => {
   try {
     const idUser = socket.tokenId;
@@ -61,8 +69,12 @@ const marketEvents = (socket, io) => {
     handleCryptoDetailWithHistory(socket, data); // <-- Llama al handler de arriba
   });
 
+   socket.on("getCoinDetailPreferences", (data) => {
+     handleCoinDetailPreferences(socket, data);
+  });
+
 // metodo para ontener la data de la tabla de la moneda con los klines de los ultimos 30 dias
-  socket.on("getCoinDetailWithHistoryRange", (data) => {
+  socket.on("getShortTermHistory", (data) => {
     coinDetailWithHistoryRange(socket, data); // Llama al handler correspondiente
   });
 

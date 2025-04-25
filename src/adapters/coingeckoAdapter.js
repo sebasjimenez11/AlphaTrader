@@ -213,10 +213,6 @@ class CoinGeckoAdapter {
      */
     async coinById(coinId) {
         try {
-            // Podríamos intentar buscar en el caché de 'coinsList' o 'coinsRanking' primero,
-            // pero una llamada directa a CoinGecko por ID es más fiable para detalles actualizados.
-
-            // console.log(`Obteniendo detalles para ${coinId} desde CoinGecko...`);
             const response = await axios.get(`${this.baseUrl}/coins/${coinId}`, {
                 params: {
                     localization: false,

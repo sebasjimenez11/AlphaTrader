@@ -2,7 +2,7 @@
 import { io } from "socket.io-client";
 
 // ... (configuración de conexión y token) ...
-const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTU3Njc5OSwiZXhwIjoxNzQ1NTgwMzk5fQ.fbY3GsjCb8smxnWKqSw2NexT9-3RcnXDpLH4Bke2V6I"; // Reemplaza con un token válido
+const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTU4MDkwOCwiZXhwIjoxNzQ1NTg0NTA4fQ.I4tgL2n9Eipj1D4rGxBqCVRPzIvPoO9at2Tutdfj5dM"; // Reemplaza con un token válido
 const socket = io("http://localhost:10101", { // O tu URL de producción
   auth: {
     token: `bearer ${token}`
@@ -10,52 +10,53 @@ const socket = io("http://localhost:10101", { // O tu URL de producción
 });
 
 socket.on("connect", () => {
-  console.log("Conectado al servidor con ID:", socket.id);
+  console.log("Conectado:", socket.id);
 
-  // --- Solicitud de Historial Corto Plazo (24h, 48h, o 72h) ---
-  const requestShortTermData = {
-    cryptoId: "ethereum", // ID de CoinGecko
-    hours: 48            // Periodo deseado: 24, 48 o 72
+  // --- Solicitar Klines basados en Preferencias (o ID específico) ---
+
+  // CASO 1: Sin cryptoId (usará la primera preferencia)
+  // const requestPrefDataDefault = {
+  //     interval: '4h', // Opcional
+  //     limit: 50       // Opcional
+  // };
+  // console.log("Emitiendo getCoinDetailPreferences (usará primera preferencia):", requestPrefDataDefault);
+  // socket.emit("getCoinDetailPreferences", requestPrefDataDefault);
+
+  // CASO 2: Con cryptoId específico (ignora preferencias para la selección inicial)
+  const requestPrefDataSpecific = {
+     cryptoId: 'cardano', // ID específico
+     interval: '1d',
+     limit: 10
   };
-  console.log("Emitiendo getShortTermHistory con:", requestShortTermData);
-  socket.emit("getShortTermHistory", requestShortTermData); // <-- Evento añadido en marketEvents
-
-
-  // --- (Opcional) Puedes seguir emitiendo otras solicitudes ---
-  // const requestKlineData = { cryptoId: "bitcoin", interval: "1d", limit: 30 };
-  // socket.emit("getCryptoDetailWithHistory", requestKlineData);
+  console.log("Emitiendo getCoinDetailPreferences (ID específico):", requestPrefDataSpecific);
+  socket.emit("getCoinDetailPreferences", requestPrefDataSpecific);
 
 });
 
-// --- Listeners para Historial Corto Plazo ---
+// --- Listeners para Klines de Preferencias ---
 
-// 1. Recibe los datos históricos iniciales (velas de 1h)
-socket.on("shortTermHistoryData", (data) => {
-  console.log("+++ Datos Históricos Corto Plazo Recibidos (shortTermHistoryData) +++");
-  console.log("Símbolo:", data.binanceSymbol);
-  console.log("Intervalo:", data.interval); // Siempre será '1h'
-  console.log("Horas:", data.hours);
-  console.log(`Recibidos ${data.klines?.length || 0} klines históricos de 1h.`);
-  // Procesar data.klines para mostrar gráfico inicial
-   if(data.klines && data.klines.length > 0) {
-       console.log("Última vela histórica (1h):", data.klines[data.klines.length - 1]);
-   }
+// Recibe datos iniciales (detalles, klines, y lista de TODAS las prefs)
+socket.on("preferenceKlineData", (data) => {
+  console.log("+++ Datos Klines Preferencia Recibidos (preferenceKlineData) +++");
+  console.log("Moneda Mostrada:", data.coinDetail?.name, `(${data.binanceSymbol})`);
+  console.log("Intervalo:", data.interval);
+  console.log(`Recibidos ${data.klines?.length || 0} klines históricos.`);
+  console.log("TODAS las Preferencias del Usuario:", data.preferredSymbols);
+  // Procesar data.klines y data.coinDetail
 });
 
-// 2. Recibe una vela COMPLETA de 1h cuando se cierra
-socket.on("shortTermHistoryUpdate", (closedCandle) => {
-  console.log("--- Vela 1h Cerrada Recibida (shortTermHistoryUpdate) ---");
-  console.log("Hora Cierre:", closedCandle.closeTime);
-  console.log("Precio Cierre:", closedCandle.currentPrice);
-  // Actualizar gráfico/tabla añadiendo esta vela cerrada
+// Recibe vela cerrada para la moneda mostrada
+socket.on("preferenceKlineUpdate", (closedCandle) => {
+  console.log("--- Vela Preferencia Cerrada (preferenceKlineUpdate) ---");
+  console.log("Moneda:", closedCandle.binanceSymbol, "Precio Cierre:", closedCandle.currentPrice);
 });
 
-// 3. Recibe actualizaciones de la vela de 1h que se está FORMANDO
-socket.on("shortTermHistoryTickUpdate", (tickData) => {
-  console.log("--- Tick Vela 1h Actual Recibido (shortTermHistoryTickUpdate) ---");
-  console.log("Hora Evento:", tickData.lastUpdated);
-  console.log("Precio Actual:", tickData.currentPrice);
-  // Actualizar la última vela (en formación) en el gráfico/tabla
+// Recibe tick de la vela en formación para la moneda mostrada
+socket.on("preferenceKlineTickUpdate", (tickData) => {
+  console.log("--- Tick Vela Preferencia (preferenceKlineTickUpdate) ---");
+   console.log("Moneda:", tickData.binanceSymbol, "Precio Actual:", tickData.currentPrice);
+  console.log(tickData);
+
 });
 
 

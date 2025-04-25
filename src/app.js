@@ -2,113 +2,98 @@
 import express from "express";
 import http from "http";
 import dotenv from "dotenv";
-
-// --- Cargar variables de entorno (DEBE SER LA PRIMERA COSA QUE SE EJECUTE SECUENCIALMENTE) ---
-const dotenvResult = dotenv.config(); // <-- Captura el resultado
-if (dotenvResult.error) {
-  console.error('Error loading .env file:', dotenvResult.error); // <-- **AÑADE ESTO**
-} else
-  dotenvResult.parsed;
-
+// ... otros imports ...
 import sequelize from "./config/db.js";
 import errorHandler from "./middlewares/errorHandler.js";
-import SocketServer from "./sockets/socketServer.js";
+import SocketServer from "./sockets/socketServer.js"; // Importar clase
+import marketDataService from "./services/marketDataService.js"; 
 import fs from 'fs';
-
 import * as models from './database/models/index.js';
 import { syncModels } from './database/models/index.js';
-
-// --- Importar Módulos de Configuración e Inicialización ---
-// Cargar variables de entorno (Debe ser lo primero)
-
-// Configurar Cloudinary (solo importar para ejecutar la configuración)
 import './config/cloudinaryConfig.js';
-
-// Conectar a Redis y obtener el cliente (es async)
 import connectRedisClient from './config/redis.js';
-
-// Configurar middlewares globales (necesita la app y el cliente Redis)
 import setupMiddlewares from './config/middleware.js';
-
-// Iniciar tareas programadas
 import startScheduledTasks from './config/tasks.js';
 
-// --- Importar Routers ---
 import authRouter from "./routers/authRouter.js";
-import userRouter from "./routers/userRouter.js"; // Asegúrate que tu userRouter incluye la ruta de subida
+import userRouter from "./routers/userRouter.js";
 import geminiRouter from "./routers/geminiRouter.js";
-import preferencesProfileRouter from "./routers/preferencesProfileRouter.js";
-// --- Proceso de Inicialización de la Aplicación ---
 
-// Inicializar Express (Corazón de app.js)
+import preferencesProfileRouter from "./routers/preferencesProfileRouter.js";
+
+// --- Cargar .env ---
+const dotenvResult = dotenv.config();
+if (dotenvResult.error) { console.error('Error loading .env file:', dotenvResult.error); }
+
 const app = express();
 
-// Crear el directorio 'uploads' si no existe (Puedes mantenerlo aquí o moverlo a un archivo de setup general si tienes más inicializaciones FS)
+// --- Crear directorio uploads ---
 const uploadDir = './uploads';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-  console.log('Created uploads directory');
-}
+if (!fs.existsSync(uploadDir)) { fs.mkdirSync(uploadDir); console.log('Created uploads directory'); }
 
-// Conectar a Redis - Lógica de arranque crítica
+// --- Conectar Redis ---
 let redisClient;
 try {
-  redisClient = await connectRedisClient(); // Esperar la conexión de Redis
+  redisClient = await connectRedisClient();
 } catch (error) {
-  console.error("❌ Error crítico al conectar a Redis. Terminando la aplicación.");
-  process.exit(1); // Terminar si no se puede conectar a Redis
+  console.error("❌ Error crítico al conectar a Redis. Terminando...", error);
+  process.exit(1);
 }
 
-// Configurar Middlewares Globales - Pasar la instancia 'app' y el cliente Redis
+// --- Middlewares globales ---
 setupMiddlewares(app, redisClient);
 
-
-// Definir ruta raíz (Opcional, puede quedarse o ir a un router)
-app.get("/", (req, res) => {
-  res.send("¡Bienvenido a AlphaTrader!");
-});
-
+// --- Rutas ---
+app.get("/", (req, res) => res.send("¡Bienvenido a AlphaTrader!"));
 app.use("/auth", authRouter);
 app.use("/user", userRouter);
 app.use("/gemini", geminiRouter);
 app.use("/preferencesProfile", preferencesProfileRouter);
 
-// Middleware de Manejo de Errores - Siempre al final (Mantener aquí)
+// --- Error Handler ---
 app.use(errorHandler);
 
-
-// Iniciar Tareas Programadas
+// --- Tareas Programadas ---
 startScheduledTasks();
 
-
-// Crear Servidor HTTP (Mantener aquí)
+// --- Servidor HTTP ---
 const server = http.createServer(app);
 
+// --- Servidor WebSocket ---
+// Pasar opciones si es necesario, como allowEIO3
+const socketServer = new SocketServer(server, { allowEIO3: true });
+socketServer.init(); // Inicia el servidor Socket.IO y la escucha de conexiones
 
-// Inicializar Servidor de WebSocket (Mantener aquí o mover si su setup es complejo)
-const socketServer = new SocketServer(server, {
-  allowEIO3: true
-});
-socketServer.init();
-
-// Manejo de Cierre Gracioso (Mantener aquí - Lógica de ciclo de vida)
+// --- Cierre Gracioso ---
 const gracefulShutdown = async () => {
-  console.log("Cerrando conexiones...");
+  console.log(" Iniciando cierre gracioso...");
   try {
-    // Cerrar Redis (si existe el cliente)
-    if (redisClient) {
-      await redisClient.quit();
-      console.log("Redis client disconnected.");
+    // 1. Cerrar conexiones WebSocket ANTES de cerrar otros servicios
+    if (socketServer) {
+      await socketServer.closeAllConnections(); // Esperar a que se limpien los sockets
+    } else {
+       console.warn("Instancia de SocketServer no encontrada para cierre gracioso.");
     }
 
-    // Cerrar Sequelize
-    await sequelize.close();
-    console.log("Sequelize connection closed.");
+    // 2. Cerrar Redis
+    if (redisClient) {
+      await redisClient.quit();
+      console.log("Cliente Redis desconectado.");
+    }
 
-    // Cerrar el servidor HTTP (permite que las peticiones en curso terminen)
-    server.close(() => {
-      console.log("HTTP server closed.");
-      process.exit(0); // Salir sin error
+    // 3. Cerrar Sequelize
+    await sequelize.close();
+    console.log("Conexión Sequelize cerrada.");
+
+    // 4. Cerrar el servidor HTTP
+    server.close((err) => {
+      if (err) {
+           console.error("Error cerrando el servidor HTTP:", err);
+           process.exit(1); // Salir con error si el cierre falla
+      } else {
+          console.log("Servidor HTTP cerrado.");
+          process.exit(0); // Salir limpiamente
+      }
     });
 
   } catch (err) {
@@ -116,22 +101,24 @@ const gracefulShutdown = async () => {
     process.exit(1); // Salir con error
   }
 
-  // Forzar salida después de un tiempo si el cierre gracioso se cuelga
+  // Timeout por si algo se cuelga
   setTimeout(() => {
-    console.error("Cierre gracioso forzado después de timeout.");
+    console.error(" Cierre gracioso forzado después de 10 segundos.");
     process.exit(1);
-  }, 10000); // 10 segundos de timeout
+  }, 10000);
 };
 
-process.on("SIGINT", gracefulShutdown); // Ctrl+C
-process.on("SIGTERM", gracefulShutdown); // kill command
+process.on("SIGINT", gracefulShutdown);
+process.on("SIGTERM", gracefulShutdown);
 
+// --- Iniciar Servidor ---
 try {
-  await syncModels(false); // false para alter, true para force
-  server.listen(process.env.PORT || 3000, () => {
-    console.log(`🚀 Servidor corriendo en puerto ${process.env.PORT || 3000}`);
+  await syncModels(false);
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, () => {
+    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
   });
 } catch (error) {
-  console.error("❌ Error al sincronizar la base de datos:", error);
+  console.error("❌ Error al sincronizar la base de datos o iniciar el servidor:", error);
   process.exit(1);
 }

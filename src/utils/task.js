@@ -7,7 +7,7 @@ const taskService = new TaskService();
 // Función para ejecutar la lógica de actualización
 export const ejecutarTareaCoins = async () => {
   try {
-    await taskService.getCoinsBinance();
+    // await taskService.getCoinsBinance();
     await taskService.getCoinsCoingecko();
     await taskService.getCoinsRanking();
   } catch (error) {
@@ -18,7 +18,7 @@ export const ejecutarTareaCoins = async () => {
 // Tarea programada cada hora
 export const tareaProgramadaCoins = cron.schedule('0 * * * *', async () => {
   try {
-    await taskService.getCoinsBinance();
+    // await taskService.getCoinsBinance();
     await taskService.getCoinsCoingecko();
     await taskService.getCoinsRanking();
     console.log(`[CRON] Tarea programada completada con éxito - ${new Date().toLocaleString()}`);

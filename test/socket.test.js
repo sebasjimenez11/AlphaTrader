@@ -5,7 +5,7 @@ import { io } from "socket.io-client";
 //   reconnectionAttempts: 5, // Número de intentos de reconexión
 //   timeout: 20000, // Tiempo de espera antes de considerar que la conexión ha fallado
 // });
-const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTQ5MTMyNSwiZXhwIjoxNzQ1NDk0OTI1fQ.Ub7BS0Ocsh6FsFKwMvrj14_kYhEIexYChG6GPG0k1l4";
+const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTU3MTg5NiwiZXhwIjoxNzQ1NTc1NDk2fQ.5QTlkD8Fj0LayOXkCq6HbVuZo9MLPt82shRgYMujWIE";
 const socket = io("http://localhost:10101", {
   auth: {
     token: `bearer ${token}`
@@ -18,7 +18,7 @@ socket.on("connect", () => {
   // Solicitar principales criptomonedas en vivo
   // socket.emit("getMainCoinsLiveData");
 
-  socket.emit("getLiveDataWithPreferences");
+  // socket.emit("getLiveDataWithPreferences");
 
   // Solicitar monedas secundarias en vivo
   // socket.emit("getSecondaryCoinsLiveData");
@@ -30,12 +30,23 @@ socket.on("connect", () => {
   // socket.emit("getConversionData", { cryptoId: "bitcoin", fiatCurrency: "USD", amountCrypto: 1 });
 });
 
-socket.on("mainCoinsLiveData", (data) => {
+// 1. MainCoinsData
+socket.on("mainCoinsData", (data) => {
   console.log("Data principales en vivo:", data);
 });
 
-socket.on("secondaryCoinsLiveData", (data) => {
+socket.on("mainCoinUpdate", (data) => {
+  console.log("Datos de conversión 1:", data);
+});
+
+
+// 2. SecondaryCoinsData
+socket.on("secondaryCoinsData", (data) => {
   console.log("Data secundarias en vivo:", data);
+});
+
+socket.on("secondaryCoinUpdate", (data) => {
+  console.log("Datos de conversión 2:", data);
 });
 
 socket.on("cryptoDetailWithHistory", (data) => {
@@ -46,23 +57,15 @@ socket.on("conversionData", (data) => {
   console.log("Datos de conversión:", data);
 });
 
-socket.on("secondaryCoinsLiveUpdate", (data) => {
-  console.log("Datos de conversión 2:", data);
-});
-
-socket.on("mainCoinsLiveUpdate", (data) => {
-  console.log("Datos de conversión 1:", data);
-});
-
 socket.on("error", (error) => {
   console.error("Error recibido:", error);
 });
 
-socket.on("liveDataWithPreferences", (data) => {
+socket.on("preferencesData", (data) => {
   console.log("Datos de preferencias:", data);
 });
 
-socket.on("dataWithPreferences", (data) => {
+socket.on("preferenceUpdate", (data) => {
   console.log("Datos de preferencias:", data);
 });
 

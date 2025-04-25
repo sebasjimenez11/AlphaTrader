@@ -13,7 +13,6 @@ const handleMainCoinsLiveData = async (socket, data) => {
 const handleSecondaryCoinsLiveData = async (socket, data) => {
   try {
     const result = await marketDataService.getSecondaryCoinsLiveData(socket);
-    socket.emit("secondaryCoinsLiveData", result);
   } catch (error) {
     console.error("Error en getSecondaryCoinsLiveData:", error.message);
     socket.emit("error", { message: error.message });
@@ -22,8 +21,7 @@ const handleSecondaryCoinsLiveData = async (socket, data) => {
 
 const handleCryptoDetailWithHistory = async (socket, data) => {
   try {
-    const { cryptoId, interval, historyRange } = data;
-    const result = await marketDataService.getCryptoDetailWithHistory(cryptoId, { interval, historyRange });
+    const result = await marketDataService.getCryptoDetailWithKlines(socket, data);
     socket.emit("cryptoDetailWithHistory", result);
   } catch (error) {
     console.error("Error en getCryptoDetailWithHistory:", error.message);
@@ -44,9 +42,7 @@ const handleConversionData = async (socket, data) => {
 
 const handleLiveDataWithPreferences = async (socket, data) => {
   try {
-    // en lugar de leerlo de data, lo tomas de lo que puso el middleware:
     const idUser = socket.tokenId;
-    
     const result = await marketDataService.getLiveDataWithPreferences(idUser, socket);
     socket.emit("dataWithPreferences", result);
   } catch (error) {

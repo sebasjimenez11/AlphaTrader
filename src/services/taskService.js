@@ -9,18 +9,18 @@ class TaskService {
         this.CoingeckoAdapter = new CoingeckoAdapter(this.redisRepository);
     }
 
-    async getCoinsBinance() {
-        try {
-            const coinsListBinance = await this.CoingeckoAdapter.getBinanceCoins();
-            if (!coinsListBinance) {
-                throw new AppError('No se pudo obtener la lista de monedas de Binance', 404);
-            }
-            // Guardar la lista de monedas en Redis con un TTL de 1 hora
-            await this.redisRepository.set('coinsListBinance', coinsListBinance, 3600);
-        } catch (e) {
-            throw new AppError(`Error al obtener monedas de Binance: ${e.message}`, 505);
-        }
-    }
+    // async getCoinsBinance() {
+    //     try {
+    //         const coinsListBinance = await this.CoingeckoAdapter.getBinanceCoins();
+    //         if (!coinsListBinance) {
+    //             throw new AppError('No se pudo obtener la lista de monedas de Binance', 404);
+    //         }
+    //         // Guardar la lista de monedas en Redis con un TTL de 1 hora
+    //         await this.redisRepository.set('coinsListBinance', coinsListBinance, 3600);
+    //     } catch (e) {
+    //         throw new AppError(`Error al obtener monedas de Binance: ${e.message}`, 505);
+    //     }
+    // }
 
     async getCoinsCoingecko() {
         try {

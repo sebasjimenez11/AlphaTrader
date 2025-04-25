@@ -1,250 +1,337 @@
+// adapters/marketDataAdapter.js
 import axios from "axios";
 import WebSocket from "ws";
-import AppError from "../utils/appError.js";
+import AppError from "../utils/appError.js"; // Asegúrate que la ruta sea correcta
 import pkg from "lodash/throttle.js";
-
 import EventEmitter from "events";
-import { formatLiveUpdate } from "../utils/coinDataFormatter.js";
+// Importar los formateadores actualizados desde tu archivo de formateadores
+import { formatLiveUpdate, formatHistoricalCandle } from "../utils/coinDataFormatter.js"; // Asegúrate que la ruta sea correcta
 
-class marketDataAdapter {
-  constructor(redisRepository) {
-    this.throttle = pkg;
-    this.redisRepository = redisRepository;
+class MarketDataAdapter {
+    constructor(redisRepository) {
+        this.throttle = pkg; // lodash throttle function
+        this.redisRepository = redisRepository;
 
-    // Configuración para Binance
-    this.binanceBaseUrl = "https://api.binance.com";
-    this.binanceWsUrl = "wss://stream.binance.com:9443";
+        // Configuración Binance
+        this.binanceApiBaseUrl = "https://api.binance.com/api/v3";
+        this.binanceWsUrl = "wss://stream.binance.com:9443";
 
-    // Configuración para CryptoCompare
-    this.cryptoCompareBaseUrl = "https://min-api.cryptocompare.com/data";
-    this.cryptoCompareApiKey = process.env.CRYPTOCOMPARE_API_KEY; // Opcional, si se requiere
+        // EventEmitter para desacoplar la recepción de datos de su emisión
+        this.eventEmitter = new EventEmitter();
 
-    // Configuración para conversión de divisas (ejemplo: exchangerate-api)
-    this.currencyConverterBaseUrl = "https://api.exchangerate-api.com/v4/latest";
-
-    // Instancia de EventEmitter para el patrón Pub/Sub
-    this.eventEmitter = new EventEmitter();
-  }
-
-  // ---------------------------
-  // Métodos para Data Histórica
-  // ---------------------------
-  formatHistoricalData(data) {
-    if (!data || data.length === 0) return data;
-
-    // Si la data proviene de CryptoCompare (posee propiedad "time")
-    if (data[0].hasOwnProperty("time")) {
-      return data.map(item => ({
-        openTime: item.time * 1000, // tiempo en milisegundos
-        open: item.open,
-        high: item.high,
-        low: item.low,
-        close: item.close,
-        volume: item.volumeto, // o volumefrom, según lo que se necesite
-        closeTime: (item.time + 86400) * 1000 // suponiendo velas diarias
-      }));
-    }
-    // Si es de Binance, asumimos que ya viene con el formato deseado:
-    return data;
-  }
-
-  async getHistoricalData(symbol, interval) {
-    const cacheKey = `marketData:historical:${symbol}:${interval}:both`;
-    let cachedData = await this.redisRepository.get(cacheKey);
-    if (cachedData) {
-      console.table(cachedData);
-      return cachedData;
+        // Configuración para conversión de divisas (mantener si aún se usa)
+        // this.currencyConverterBaseUrl = "https://api.exchangerate-api.com/v4/latest";
     }
 
-    let dataFromAPI;
-    try {
-      const binancePromise = axios.get(`${this.binanceBaseUrl}/api/v3/klines`, {
-        params: {
-          symbol: symbol.toUpperCase(),
-          interval: interval,
-          limit: 500
+    /**
+     * Obtiene datos históricos de velas (Klines) de Binance para un símbolo e intervalo.
+     * @param {string} binanceSymbol - Símbolo del par (ej. 'BTCUSDT').
+     * @param {string} interval - Intervalo de Binance (ej. '1h', '4h', '1d').
+     * @param {number} [limit=500] - Cantidad de velas a obtener (máx 1000).
+     * @param {number} [startTime] - Timestamp de inicio (ms).
+     * @param {number} [endTime] - Timestamp de fin (ms).
+     * @returns {Promise<Array<object>>} - Array de velas formateadas.
+     */
+    async getKlinesData(binanceSymbol, interval, limit = 500, startTime, endTime) {
+        if (!binanceSymbol || !interval) {
+             console.error("getKlinesData: Se requiere binanceSymbol e interval.");
+             return []; // Devuelve vacío si faltan parámetros clave
         }
-      })
-        .then(response => response.data.map(item => ({
-          openTime: item[0],
-          open: item[1],
-          high: item[2],
-          low: item[3],
-          close: item[4],
-          volume: item[5],
-          closeTime: item[6]
-        })))
-        .catch(err => {
-          console.error("Error en Binance:", err.message);
-          return null;
-        });
+        // Validar límite
+        if (limit > 1000) limit = 1000;
 
-      const cryptoPromise = axios.get(`${this.cryptoCompareBaseUrl}/v2/histoday`, {
-        params: {
-          fsym: symbol.toUpperCase(),
-          tsym: "USD",
-          limit: 2000,
-          aggregate: 1,
-          api_key: this.cryptoCompareApiKey
-        }
-      })
-        .then(response => {
-          if (response.data.Response !== "Success") {
-            throw new AppError("Error al obtener datos de CryptoCompare", 500);
-          }
-          return response.data.Data.Data;
-        })
-        .catch(err => {
-          console.error("Error en CryptoCompare:", err.message);
-          return null;
-        });
-
-      dataFromAPI = await Promise.race([binancePromise, cryptoPromise]);
-      if (!dataFromAPI) {
-        dataFromAPI = await Promise.any([binancePromise, cryptoPromise]);
-      }
-    } catch (error) {
-      throw new AppError(error.message, 505);
-    }
-
-    const standardizedData = this.formatHistoricalData(dataFromAPI);
-    await this.redisRepository.set(cacheKey, standardizedData, 300);
-    return standardizedData;
-  }
-
-  // -------------------------------
-  // Métodos para Actualizaciones en Vivo
-  // -------------------------------
-
-  /**
-   * Se suscribe a actualizaciones en tiempo real desde Binance para un solo símbolo.
-   * Los datos se almacenan en Redis y se emiten como un solo objeto.
-   *
-   * @param {string} symbol - El símbolo (ej. "BTCUSDT")
-   * @returns {WebSocket} - La instancia del WebSocket.
-   */
-  /**
-   * Suscribe a actualizaciones en tiempo real desde Binance para múltiples símbolos.
-   * @param {string[]} symbols - Lista de símbolos (por ejemplo, ["BTCUSDT", "ETHUSDT"]).
-   * @returns {WebSocket} - Instancia del WebSocket.
-   */
-  subscribeToMultipleMarketUpdates(symbols) {
-    try {
-      // Verificar y normalizar los símbolos
-      const validSymbols = symbols
-        .map(s => {
-          const lower = s.toLowerCase();
-          const fixed = lower.replace(/tusd$/, "usdt");
-          return fixed.endsWith("usdt") ? fixed : fixed + "usdt";
-        })
-        .filter(s => /^[a-z0-9]+usdt$/.test(s));
-
-      if (validSymbols.length === 0) {
-        throw new Error("No se han proporcionado símbolos válidos para Binance.");
-      }
-
-      // Construir la URL de streams
-      const streams = validSymbols.map(s => `${s}@miniTicker`).join("/");
-      const wsUrl = `${this.binanceWsUrl}/stream?streams=${streams}`;
-
-      const ws = new WebSocket(wsUrl);
-      const marketData = {};
-      const lastEmitted = {}; // guarda el último dato emitido por símbolo
-
-      ws.on("open", () =>
-        console.log("Conectado a Binance WebSocket [Múltiples]")
-      );
-
-      // Procesamiento con throttling de 200ms (5 mensajes/segundo)
-      const processMessageThrottled = this.throttle(async (data) => {
+        const cacheKey = `klines:${binanceSymbol}:${interval}:${limit}:${startTime || 'na'}:${endTime || 'na'}`;
         try {
-          const parsed = JSON.parse(data);
-          const coinRaw = parsed.data;
-          const coin = formatLiveUpdate(coinRaw);
-          const key = coinRaw.s;
+            const cachedData = await this.redisRepository.get(cacheKey);
+            if (cachedData && Array.isArray(cachedData)) {
+                return cachedData;
+            }
 
-          // Solo emitir si cambió precio o volumen
-          const prev = lastEmitted[key];
-          if (
-            !prev ||
-            prev.Precio !== coin.Precio ||
-            prev.Volumen !== coin.Volumen
-          ) {
-            lastEmitted[key] = coin;
-            marketData[key] = coin;
+            const params = {
+                symbol: binanceSymbol.toUpperCase(),
+                interval: interval,
+                limit: limit
+            };
+            if (startTime) params.startTime = startTime;
+            if (endTime) params.endTime = endTime;
 
-            await this.redisRepository.set(
-              `marketData:realtime:${key}`,
-              coin,
-              60
-            );
-            this.eventEmitter.emit(
-              "marketDataUpdate",
-              Object.values(marketData)
-            );
-          }
-        } catch (err) {
-          console.error("Error procesando mensaje:", err);
+            const response = await axios.get(`${this.binanceApiBaseUrl}/klines`, { params });
+            const klinesRaw = response.data;
+
+            if (!Array.isArray(klinesRaw)) {
+                throw new AppError("Respuesta inesperada de la API de Klines de Binance", 502);
+            }
+
+            // Formatear usando la función actualizada
+            const formattedKlines = klinesRaw.map(kline => formatHistoricalCandle(kline, binanceSymbol));
+
+            // Guardar en caché (ej. 5 minutos = 300 segundos) solo si hay datos
+            if (formattedKlines.length > 0) {
+                 await this.redisRepository.set(cacheKey, formattedKlines, 300);
+            }
+
+            return formattedKlines;
+
+        } catch (error) {
+            const status = error.response?.status || 500;
+            const message = error.response?.data?.msg || error.message;
+            console.error(`Error en getKlinesData (${binanceSymbol}, ${interval}): ${status} - ${message}`);
+            // Devuelve array vacío en caso de error API para manejo en el servicio
+            return [];
         }
-      }, 200);
-
-      ws.on("message", data => processMessageThrottled(data));
-
-      ws.on("error", err => console.error("Error en WebSocket:", err));
-      ws.on("close", () => console.log("WebSocket cerrado [Múltiples]"));
-
-      return ws;
-    } catch (error) {
-      throw new AppError(error.message, 505);
     }
-  }
 
-
-  subscribeToCandlestickUpdates(symbol, interval) {
-    const stream = `${symbol.toLowerCase()}@kline_${interval}`;
-    const ws = new WebSocket(`${this.binanceWsUrl}/ws/${stream}`);
-    ws.on("open", () => console.log(`Conectado a velas ${symbol} @ ${interval}`));
-
-    ws.on("message", raw => {
-      const { k } = JSON.parse(raw).data;
-      if (k.x) {  // vela cerrada
-        const candle = {
-          openTime: k.t, open: k.o, high: k.h,
-          low: k.l, close: k.c, volume: k.v, closeTime: k.T
-        };
-        const formatted = formatHistoricalCandle(candle, symbol);
-        // guardar en cache opcional:
-        this.redisRepository.set(`candles:${symbol}:${interval}`, formatted, 3600);
-        this.eventEmitter.emit("candlestickUpdate", { symbol, interval, candle: formatted });
-      }
-    });
-
-    ws.on("error", err => console.error("WS candlestick error:", err));
-    ws.on("close", () => console.log(`WS candlestick cerrado: ${symbol}@${interval}`));
-    return ws;
-  }
-
-
-  // ----------------------------
-  // Métodos para Conversión de Divisas
-  // ----------------------------
-  async convertCurrency(amount, fromCurrency, toCurrency) {
-    const cacheKey = `currencyRate:${fromCurrency}:${toCurrency}`;
-    let rate = await this.redisRepository.get(cacheKey);
-    if (!rate) {
-      try {
-        const response = await axios.get(`${this.currencyConverterBaseUrl}/${fromCurrency.toUpperCase()}`);
-        rate = response.data.rates[toCurrency.toUpperCase()];
-        if (!rate) {
-          throw new AppError("Tasa de conversión no encontrada", 404);
+    /**
+     * Obtiene datos históricos de velas para periodos cortos (24h, 48h, 72h).
+     * Utiliza velas de 1 hora.
+     * @param {string} binanceSymbol - Símbolo del par (ej. 'BTCUSDT').
+     * @param {number} hours - Periodo en horas (24, 48 o 72).
+     * @returns {Promise<Array<object>>} - Array de velas formateadas de 1h.
+     */
+    async getShortTermHistory(binanceSymbol, hours) {
+        if (![24, 48, 72].includes(hours)) {
+            // Lanza error para que el servicio lo capture y reporte al cliente
+            throw new AppError("Periodo de horas inválido para historial corto. Usar 24, 48 o 72.", 400);
         }
-        await this.redisRepository.set(cacheKey, rate, 600);
-      } catch (error) {
-        throw new AppError(error.message, 505);
-      }
+        if (!binanceSymbol) {
+             throw new AppError("Se requiere binanceSymbol para getShortTermHistory.", 400);
+        }
+
+        const interval = '1h'; // Usar velas de 1 hora
+        const limit = hours; // Pedir exactamente el número de velas/horas
+
+        // Se llama a getKlinesData pidiendo las 'limit' velas más recientes.
+        return this.getKlinesData(binanceSymbol, interval, limit);
     }
-    return amount * rate;
-  }
+
+
+    /**
+     * Se suscribe a actualizaciones en tiempo real de velas (Klines) desde Binance.
+     * Emite eventos 'candlestickUpdate' (vela cerrada) y 'candlestickTickUpdate' (vela formándose).
+     * @param {string} binanceSymbol - Símbolo del par (ej. 'BTCUSDT').
+     * @param {string} interval - Intervalo de la vela (ej. '1h', '1d').
+     * @returns {WebSocket} - La instancia del WebSocket.
+     * @throws {AppError} Si la suscripción falla.
+     */
+    subscribeToCandlestickUpdates(binanceSymbol, interval) {
+        if (!binanceSymbol || !interval) {
+             throw new AppError("Se requiere binanceSymbol e interval para suscribir a velas.", 400);
+        }
+        const symbolLower = binanceSymbol.toLowerCase();
+        const stream = `${symbolLower}@kline_${interval}`;
+        const wsUrl = `${this.binanceWsUrl}/ws/${stream}`;
+
+        try {
+            const ws = new WebSocket(wsUrl);
+
+            ws.on("open", () => console.log(`WS Klines conectado: ${binanceSymbol}@${interval}`));
+
+            ws.on("message", (data) => {
+                try {
+                    const message = JSON.parse(data.toString()); // Asegurar que es string antes de parsear
+                    // Verificar si es un mensaje de kline válido
+                    if (message.e === 'kline') {
+                        const k = message.k;
+                        const isClosed = k.x; // ¿Está cerrada la vela?
+
+                        if (isClosed) {
+                            // Vela cerrada: formatear como vela histórica completa
+                            const candleArray = [
+                                k.t, k.o, k.h, k.l, k.c, k.v, k.T, k.q, k.n, k.V, k.Q, k.B
+                            ];
+                            const formattedClosedCandle = formatHistoricalCandle(candleArray, binanceSymbol);
+                            this.eventEmitter.emit("candlestickUpdate", {
+                                symbol: binanceSymbol, // Emitir con el símbolo exacto suscrito
+                                interval: interval,
+                                candle: formattedClosedCandle
+                            });
+                            // Opcional: guardar en cache la última vela cerrada
+                            this.redisRepository.set(`lastCandle:${binanceSymbol}:${interval}`, formattedClosedCandle, 3600 * 24);
+                        } else {
+                            // Vela aún abierta (Tick Update): formatear como actualización en vivo
+                            // Se usa parseFloat para asegurar que son números
+                            const tickUpdate = {
+                                id: null, name: null,
+                                symbol: binanceSymbol.replace(/(USDT|TUSD|BUSD|USDC)$/, '').toLowerCase(),
+                                binanceSymbol: binanceSymbol,
+                                image: null, marketCap: null, marketCapRank: null,
+                                currentPrice: parseFloat(k.c),
+                                highPrice: parseFloat(k.h),
+                                lowPrice: parseFloat(k.l),
+                                openPrice: parseFloat(k.o),
+                                priceChangePercentage: ((parseFloat(k.c) - parseFloat(k.o)) / parseFloat(k.o)) * 100, // Cambio vs apertura
+                                totalVolume: parseFloat(k.v),
+                                trend: parseFloat(k.c) > parseFloat(k.o) ? 'bullish' : (parseFloat(k.c) < parseFloat(k.o) ? 'bearish' : 'neutral'),
+                                openTime: new Date(k.t).toISOString(),
+                                closeTime: new Date(k.T).toISOString(),
+                                lastUpdated: new Date(message.E).toISOString(),
+                                eventTime: message.E, // Timestamp del evento
+                                isForming: true
+                            };
+                            this.eventEmitter.emit("candlestickTickUpdate", {
+                                symbol: binanceSymbol, // Emitir con el símbolo exacto suscrito
+                                interval: interval,
+                                tick: tickUpdate
+                            });
+                        }
+                    }
+                } catch (parseError) {
+                    console.error(`Error parseando mensaje kline WS (${binanceSymbol}@${interval}):`, parseError, data.toString());
+                }
+            });
+
+            ws.on("error", (err) => console.error(`Error en WS Klines (${binanceSymbol}@${interval}):`, err.message));
+            ws.on("close", (code, reason) => {
+                const reasonString = reason ? reason.toString() : 'No reason provided';
+                 // Podrías querer emitir un evento para que el servicio sepa que se cerró inesperadamente
+                 this.eventEmitter.emit("candlestickDisconnect", { symbol: binanceSymbol, interval: interval, code: code, reason: reasonString });
+            });
+             ws.on("unexpected-response", (req, res) => {
+                 console.error(`Respuesta inesperada en WS Klines (${binanceSymbol}@${interval}): Status ${res.statusCode}`);
+                 if (ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
+                     ws.terminate(); // Forzar cierre
+                 }
+                  this.eventEmitter.emit("candlestickDisconnect", { symbol: binanceSymbol, interval: interval, code: `unexpected-${res.statusCode}`, reason: 'Unexpected server response' });
+            });
+
+            return ws;
+
+        } catch (error) {
+            console.error(`No se pudo crear el WebSocket para ${binanceSymbol}@${interval}: ${error.message}`);
+            // Lanzar error para que el servicio sepa que falló la suscripción
+            throw new AppError(`Fallo al suscribir a velas para ${binanceSymbol}@${interval}: ${error.message}`, 500);
+        }
+    }
+
+     /**
+     * Se suscribe a actualizaciones en tiempo real desde Binance para múltiples símbolos (miniTicker).
+     * Ideal para vistas generales con muchas monedas. Emite 'marketDataUpdate'.
+     * @param {string[]} binanceSymbols - Lista de símbolos de Binance (ej. ["BTCUSDT", "ETHUSDT"]).
+     * @returns {WebSocket | null} - Instancia del WebSocket o null si no hay símbolos válidos.
+     * @throws {AppError} Si la suscripción falla catastróficamente.
+     */
+    subscribeToMultipleMarketUpdates(binanceSymbols) {
+         if (!Array.isArray(binanceSymbols) || binanceSymbols.length === 0) {
+             console.warn("subscribeToMultipleMarketUpdates: No se proporcionaron símbolos.");
+             return null; // No iniciar si no hay símbolos
+         }
+        try {
+            // Asegurar que los símbolos sean válidos y en minúsculas para la URL del stream
+             const validSymbolsLower = binanceSymbols
+                .map(s => s.trim().toUpperCase()) // Limpiar y asegurar mayúsculas primero
+                .filter(s => /^[A-Z0-9]+USDT$/.test(s)) // Validar formato (ajusta si usas otros pares)
+                .map(s => s.toLowerCase()); // Convertir a minúsculas para el stream URL
+
+            if (validSymbolsLower.length === 0) {
+                console.warn("subscribeToMultipleMarketUpdates: Ningún símbolo válido encontrado después de filtrar.");
+                return null; // No iniciar si no quedan símbolos válidos
+            }
+
+            // Construir la URL de streams
+            const streams = validSymbolsLower.map(s => `${s}@miniTicker`).join("/");
+            const wsUrl = `${this.binanceWsUrl}/stream?streams=${streams}`;
+
+            const ws = new WebSocket(wsUrl);
+            // const marketData = {}; // No parece necesario mantener el estado aquí si se emite por símbolo
+            const lastEmitted = {}; // Para throttling basado en cambios
+
+            ws.on("open", () => console.log(`WS Multi Ticker conectado para ${validSymbolsLower.length} símbolos.`));
+
+            // Throttle para limitar procesamiento/emisión
+            const processMessageThrottled = this.throttle(async (rawData) => {
+                try {
+                    const message = JSON.parse(rawData.toString());
+                    if (message.stream && message.data && message.data.e === '24hrMiniTicker') {
+                         const coinRaw = message.data;
+                         const coinFormatted = formatLiveUpdate(coinRaw); // Usa el formateador actualizado
+
+                         if (!coinFormatted || !coinFormatted.binanceSymbol) {
+                             console.warn("MiniTicker: Formateo inválido o falta binanceSymbol", coinRaw);
+                             return;
+                         }
+
+                         const key = coinFormatted.binanceSymbol; // Clave ej: BTCUSDT
+
+                         // Optimización: Solo emitir si el precio o volumen cambiaron
+                         const prev = lastEmitted[key];
+                         if (!prev || prev.currentPrice !== coinFormatted.currentPrice || prev.totalVolume !== coinFormatted.totalVolume) {
+                            lastEmitted[key] = coinFormatted;
+
+                            // Opcional: Cachear en Redis (TTL corto)
+                            // await this.redisRepository.set(`marketData:realtime:${key}`, coinFormatted, 60);
+
+                            // Emitir un objeto solo con la moneda actualizada { SYMBOL: data }
+                            this.eventEmitter.emit("marketDataUpdate", { [key]: coinFormatted });
+                         }
+                    }
+                } catch (err) {
+                    console.error("Error procesando mensaje miniTicker WS:", err, rawData.toString());
+                }
+            }, 200); // Ajusta el throttle según necesidad
+
+            ws.on("message", processMessageThrottled);
+            ws.on("error", (err) => console.error("Error en WS Multi Ticker:", err.message));
+            ws.on("close", (code, reason) => {
+                 const reasonString = reason ? reason.toString() : 'No reason provided';
+                 // Emitir evento de desconexión si es necesario gestionarlo en el servicio
+                  this.eventEmitter.emit("multiTickerDisconnect", { code: code, reason: reasonString });
+            });
+             ws.on("unexpected-response", (req, res) => {
+                 console.error(`Respuesta inesperada en WS Multi Ticker: Status ${res.statusCode}`);
+                  if (ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
+                     ws.terminate();
+                 }
+                 this.eventEmitter.emit("multiTickerDisconnect", { code: `unexpected-${res.statusCode}`, reason: 'Unexpected server response' });
+            });
+
+            return ws;
+        } catch (error) {
+             console.error(`No se pudo crear el WebSocket múltiple: ${error.message}`);
+             // Lanzar para que el servicio lo maneje
+             throw new AppError(`Fallo al suscribir a múltiples tickers: ${error.message}`, 500);
+        }
+    }
+
+
+    // --- Método de Conversión de Divisas (si aún se usa) ---
+    async convertCurrency(amount, fromCurrency, toCurrency) {
+        // Código existente... parece correcto si la API sigue funcionando.
+        // Añadir validación básica de parámetros
+        if (typeof amount !== 'number' || !fromCurrency || !toCurrency) {
+            throw new AppError("Parámetros inválidos para conversión de moneda.", 400);
+        }
+        const cacheKey = `currencyRate:${fromCurrency.toUpperCase()}:${toCurrency.toUpperCase()}`;
+        let rate = await this.redisRepository.get(cacheKey);
+        if (rate) {
+             // Asegurarse que el caché es un número
+             rate = parseFloat(rate);
+             if (!isNaN(rate)) {
+                 return amount * rate;
+             } else {
+                  console.warn(`Valor de caché inválido para ${cacheKey}`);
+                  // Proceder a buscar en API si el caché es inválido
+             }
+        }
+        try {
+            const response = await axios.get(`${this.currencyConverterBaseUrl}/${fromCurrency.toUpperCase()}`); // Asegurar mayúsculas
+            const rateFound = response.data?.rates?.[toCurrency.toUpperCase()]; // Acceso seguro
+
+            if (typeof rateFound !== 'number') { // Verificar que sea un número
+                throw new AppError(`Tasa de conversión no encontrada o inválida para ${toCurrency.toUpperCase()}`, 404);
+            }
+            await this.redisRepository.set(cacheKey, rateFound.toString(), 600); // Guardar como string
+            return amount * rateFound;
+        } catch (error) {
+            const status = error.response?.status || (error instanceof AppError ? error.statusCode : 500);
+            const message = error.response?.data?.error || error.message;
+            // Evitar lanzar errores genéricos si es un 404 esperado
+            if (status === 404 && error instanceof AppError) {
+                 throw error; // Re-lanzar el error 404 específico
+            }
+             console.error(`Error en API de conversión (${fromCurrency} a ${toCurrency}): ${status} - ${message}`);
+             throw new AppError(`Error en servicio de conversión: ${message}`, status);
+        }
+    }
 }
 
-export default marketDataAdapter;
+export default MarketDataAdapter;

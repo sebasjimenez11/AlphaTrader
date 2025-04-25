@@ -332,6 +332,8 @@ class MarketDataAdapter {
              throw new AppError(`Error en servicio de conversión: ${message}`, status);
         }
     }
+
+    
 }
 
 export default MarketDataAdapter;

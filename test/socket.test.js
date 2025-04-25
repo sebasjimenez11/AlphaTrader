@@ -1,12 +1,9 @@
 // test/socketClientTest.js
 import { io } from "socket.io-client";
 
-// const socket = io("https://alphatraderback-esenfrgzcnbfbufw.brazilsouth-01.azurewebsites.net", {
-//   reconnectionAttempts: 5, // Número de intentos de reconexión
-//   timeout: 20000, // Tiempo de espera antes de considerar que la conexión ha fallado
-// });
-const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTU3MTg5NiwiZXhwIjoxNzQ1NTc1NDk2fQ.5QTlkD8Fj0LayOXkCq6HbVuZo9MLPt82shRgYMujWIE";
-const socket = io("http://localhost:10101", {
+// ... (configuración de conexión y token) ...
+const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTU3Njc5OSwiZXhwIjoxNzQ1NTgwMzk5fQ.fbY3GsjCb8smxnWKqSw2NexT9-3RcnXDpLH4Bke2V6I"; // Reemplaza con un token válido
+const socket = io("http://localhost:10101", { // O tu URL de producción
   auth: {
     token: `bearer ${token}`
   }
@@ -15,60 +12,63 @@ const socket = io("http://localhost:10101", {
 socket.on("connect", () => {
   console.log("Conectado al servidor con ID:", socket.id);
 
-  // Solicitar principales criptomonedas en vivo
-  // socket.emit("getMainCoinsLiveData");
+  // --- Solicitud de Historial Corto Plazo (24h, 48h, o 72h) ---
+  const requestShortTermData = {
+    cryptoId: "ethereum", // ID de CoinGecko
+    hours: 48            // Periodo deseado: 24, 48 o 72
+  };
+  console.log("Emitiendo getShortTermHistory con:", requestShortTermData);
+  socket.emit("getShortTermHistory", requestShortTermData); // <-- Evento añadido en marketEvents
 
-  // socket.emit("getLiveDataWithPreferences");
 
-  // Solicitar monedas secundarias en vivo
-  // socket.emit("getSecondaryCoinsLiveData");
+  // --- (Opcional) Puedes seguir emitiendo otras solicitudes ---
+  // const requestKlineData = { cryptoId: "bitcoin", interval: "1d", limit: 30 };
+  // socket.emit("getCryptoDetailWithHistory", requestKlineData);
 
-  // Solicitar detalle de una crypto con historial
-  // socket.emit("getCryptoDetailWithHistory", { cryptoId: "bitcoin", interval: "1d", historyRange: "30d" });
-
-  // Solicitar datos de conversión
-  // socket.emit("getConversionData", { cryptoId: "bitcoin", fiatCurrency: "USD", amountCrypto: 1 });
 });
 
-// 1. MainCoinsData
-socket.on("mainCoinsData", (data) => {
-  console.log("Data principales en vivo:", data);
+// --- Listeners para Historial Corto Plazo ---
+
+// 1. Recibe los datos históricos iniciales (velas de 1h)
+socket.on("shortTermHistoryData", (data) => {
+  console.log("+++ Datos Históricos Corto Plazo Recibidos (shortTermHistoryData) +++");
+  console.log("Símbolo:", data.binanceSymbol);
+  console.log("Intervalo:", data.interval); // Siempre será '1h'
+  console.log("Horas:", data.hours);
+  console.log(`Recibidos ${data.klines?.length || 0} klines históricos de 1h.`);
+  // Procesar data.klines para mostrar gráfico inicial
+   if(data.klines && data.klines.length > 0) {
+       console.log("Última vela histórica (1h):", data.klines[data.klines.length - 1]);
+   }
 });
 
-socket.on("mainCoinUpdate", (data) => {
-  console.log("Datos de conversión 1:", data);
+// 2. Recibe una vela COMPLETA de 1h cuando se cierra
+socket.on("shortTermHistoryUpdate", (closedCandle) => {
+  console.log("--- Vela 1h Cerrada Recibida (shortTermHistoryUpdate) ---");
+  console.log("Hora Cierre:", closedCandle.closeTime);
+  console.log("Precio Cierre:", closedCandle.currentPrice);
+  // Actualizar gráfico/tabla añadiendo esta vela cerrada
+});
+
+// 3. Recibe actualizaciones de la vela de 1h que se está FORMANDO
+socket.on("shortTermHistoryTickUpdate", (tickData) => {
+  console.log("--- Tick Vela 1h Actual Recibido (shortTermHistoryTickUpdate) ---");
+  console.log("Hora Evento:", tickData.lastUpdated);
+  console.log("Precio Actual:", tickData.currentPrice);
+  // Actualizar la última vela (en formación) en el gráfico/tabla
 });
 
 
-// 2. SecondaryCoinsData
-socket.on("secondaryCoinsData", (data) => {
-  console.log("Data secundarias en vivo:", data);
-});
-
-socket.on("secondaryCoinUpdate", (data) => {
-  console.log("Datos de conversión 2:", data);
-});
-
-socket.on("cryptoDetailWithHistory", (data) => {
-  console.log("Detalle con historial:", data);
-});
-
-socket.on("conversionData", (data) => {
-  console.log("Datos de conversión:", data);
-});
-
-socket.on("error", (error) => {
-  console.error("Error recibido:", error);
-});
-
-socket.on("preferencesData", (data) => {
-  console.log("Datos de preferencias:", data);
-});
-
-socket.on("preferenceUpdate", (data) => {
-  console.log("Datos de preferencias:", data);
-});
-
-socket.on("disconnect", () => {
-  console.log("Desconectado del servidor");
-});
+// --- Otros Listeners (klineData, klineUpdate, klineTickUpdate, mainCoins, etc.) ---
+socket.on("klineData", (data) => { /* ... */ });
+socket.on("klineUpdate", (data) => { /* ... */ });
+socket.on("klineTickUpdate", (data) => { /* ... */ });
+socket.on("mainCoinsData", (data) => { /* ... */ });
+socket.on("mainCoinUpdate", (data) => { /* ... */ });
+socket.on("secondaryCoinsData", (data) => { /* ... */ });
+socket.on("secondaryCoinUpdate", (data) => { /* ... */ });
+socket.on("preferencesData", (data) => { /* ... */ });
+socket.on("preferenceUpdate", (data) => { /* ... */ }); // Espera [ { datos } ]
+socket.on("error", (error) => { console.error("!!! Error recibido del servidor:", error); });
+socket.on("disconnect", () => { console.log("Desconectado del servidor"); });
+socket.on("connect_error", (err) => { console.error("Error de conexión:", err.message, err.data || ''); });

@@ -21,24 +21,20 @@ const handleSecondaryCoinsLiveData = async (socket, data) => {
 
 const handleCryptoDetailWithHistory = async (socket, data) => {
   try {
-    const result = await marketDataService.getCryptoDetailWithKlines(socket, data);
-    socket.emit("cryptoDetailWithHistory", result);
+    await marketDataService.getCryptoDetailWithKlines(socket, data);
   } catch (error) {
     console.error("Error en getCryptoDetailWithHistory:", error.message);
     socket.emit("error", { message: error.message });
   }
 };
 
-const handleConversionData = async (socket, data) => {
+const coinDetailWithHistoryRange = async (socket, data) => {
   try {
-    const { cryptoId, fiatCurrency, amountCrypto } = data;
-    const result = await marketDataService.getConversionData(cryptoId, fiatCurrency, amountCrypto);
-    socket.emit("conversionData", result);
+    await marketDataService.getShortTermHistoryWithLiveUpdates(socket, data);
   } catch (error) {
-    console.error("Error en getConversionData:", error.message);
-    socket.emit("error", { message: error.message });
+    console.error(`[${socket.id}] Error procesando getShortTermHistory:`, error.message);
   }
-};
+}
 
 const handleLiveDataWithPreferences = async (socket, data) => {
   try {
@@ -61,12 +57,13 @@ const marketEvents = (socket, io) => {
     handleSecondaryCoinsLiveData(socket, data);
   });
 
-  socket.on("getCryptoDetailWithHistory", (data) => {
-    handleCryptoDetailWithHistory(socket, data);
+ socket.on("getCryptoDetailWithHistory", (data) => { // <-- Evento que escucha del cliente
+    handleCryptoDetailWithHistory(socket, data); // <-- Llama al handler de arriba
   });
 
-  socket.on("getConversionData", (data) => {
-    handleConversionData(socket, data);
+// metodo para ontener la data de la tabla de la moneda con los klines de los ultimos 30 dias
+  socket.on("getCoinDetailWithHistoryRange", (data) => {
+    coinDetailWithHistoryRange(socket, data); // Llama al handler correspondiente
   });
 
   socket.on("getLiveDataWithPreferences", (data) => {

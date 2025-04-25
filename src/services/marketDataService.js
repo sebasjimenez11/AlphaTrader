@@ -175,9 +175,8 @@ class MarketDataService {
                  return;
              }
             const binanceSymbol = coinDetail.binanceSymbol;
-            socket.emit("coinDetail", { coinDetail });
             const historicalKlines = await this.marketDataAdap.getKlinesData(binanceSymbol, interval, limit);
-            socket.emit("klineData", { binanceSymbol, interval, klines: historicalKlines });
+            socket.emit("klineData", { binanceSymbol, interval, klines: historicalKlines , coinDetail});
 
             const wsKline = this.marketDataAdap.subscribeToCandlestickUpdates(binanceSymbol, interval);
             this.socketWebsockets.set(`kline_${socketId}`, wsKline);
@@ -231,13 +230,11 @@ class MarketDataService {
 
              const shortTermUpdateListener = (update) => {
                  if (update.symbol === binanceSymbol && update.interval === interval) {
-                     // La actualización de velas cerradas ya viene como objeto
                      socket.emit("shortTermHistoryUpdate", update.candle);
                  }
              };
              const shortTermTickListener = (tickUpdate) => {
                   if (tickUpdate.symbol === binanceSymbol && tickUpdate.interval === interval) {
-                      // La actualización de ticks ya viene como objeto
                      socket.emit("shortTermHistoryTickUpdate", tickUpdate.tick);
                  }
              };
@@ -251,20 +248,6 @@ class MarketDataService {
          } catch (error) {
              console.error(`[${socketId}] Error en getShortTermHistoryWithLiveUpdates:`, error);
              socket.emit("error", { message: `Error obteniendo historial corto para ${cryptoId}: ${error.message}` });
-         }
-    }
-
-    async getConversionData(cryptoId, fiatCurrency = "USD", amountCrypto = 1) {
-        try {
-             if (!cryptoId || !fiatCurrency || typeof amountCrypto !== 'number' || amountCrypto < 0) {
-                 throw new AppError("Parámetros de conversión inválidos.", 400);
-             }
-             const conversion = await this.CoinGeckoAdap.convertirCryptoAmoneda(cryptoId, fiatCurrency, amountCrypto);
-             return { cryptoId, fiatCurrency, amountCrypto, amountConverted: conversion };
-         } catch (error) {
-              console.error(`Error en getConversionData (${cryptoId} a ${fiatCurrency}):`, error);
-              if (error instanceof AppError) { throw error; }
-              else { throw new AppError(`Error en servicio de conversión: ${error.message}`, 500); }
          }
     }
 }

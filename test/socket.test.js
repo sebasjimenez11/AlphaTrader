@@ -2,7 +2,7 @@
 import { io } from "socket.io-client";
 
 // ... (configuración de conexión y token) ...
-const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTU4MDkwOCwiZXhwIjoxNzQ1NTg0NTA4fQ.I4tgL2n9Eipj1D4rGxBqCVRPzIvPoO9at2Tutdfj5dM"; // Reemplaza con un token válido
+const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTYyOTk0NywiZXhwIjoxNzQ1NjMzNTQ3fQ.-g8W2Q9RDB9duC5PZlaOceso39_caTrcFTs9iNNm9A8"; // Reemplaza con un token válido
 const socket = io("http://localhost:10101", { // O tu URL de producción
   auth: {
     token: `bearer ${token}`

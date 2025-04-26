@@ -18,6 +18,7 @@ import startScheduledTasks from './config/tasks.js';
 import authRouter from "./routers/authRouter.js";
 import userRouter from "./routers/userRouter.js";
 import geminiRouter from "./routers/geminiRouter.js";
+import coinsRouter from "./routers/coinsRouter.js";
 
 import preferencesProfileRouter from "./routers/preferencesProfileRouter.js";
 
@@ -49,7 +50,7 @@ app.use("/auth", authRouter);
 app.use("/user", userRouter);
 app.use("/gemini", geminiRouter);
 app.use("/preferencesProfile", preferencesProfileRouter);
-
+app.use("/coins", coinsRouter);
 // --- Error Handler ---
 app.use(errorHandler);
 

@@ -39,7 +39,7 @@ class UserService {
       throw new AppError('Usuario no encontrado', 404);
     }
     const token = generateToken(user);
-    return {token, user};
+    return { token, user };
   }
 
   async uploadProfileImage(userEmail, userId, file) {
@@ -73,6 +73,48 @@ class UserService {
       status: true,
       message: 'Usuario encontrado',
       data: user
+    };
+  }
+
+  async updateUser(userId, data) {
+    const user = await this.userRepository.updateById(userId, data);
+    if (!user) {
+      throw new AppError('Usuario no encontrado', 404);
+    }
+    return {
+      status: true,
+      message: 'Usuario actualizado',
+      data: user
+    };
+  }
+
+  async deleteUser(userId) {
+    const user = await this.userRepository.deleteById(userId);
+    if (!user) {
+      throw new AppError('Usuario no encontrado', 404);
+    }
+    return {
+      status: true,
+      message: 'Usuario eliminado',
+      data: user
+    };
+  }
+
+  async changePassword(userId, { CurrentPassword, NewPassword }) {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new AppError('Usuario no encontrado', 404);
+    }
+
+    const isPasswordCorrect = await compareHash(CurrentPassword, user.Password);
+    if (!isPasswordCorrect) {
+      throw new AppError('Contraseña incorrecta', 401);
+    }
+
+    const hashedNewPassword = await generateHash(NewPassword);
+    await this.userRepository.updateById(userId, { Password: hashedNewPassword });
+    return {
+      status: true,
     };
   }
 }

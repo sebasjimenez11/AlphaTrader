@@ -46,4 +46,28 @@ router.get(
   catchAsync(userController.profile.bind(userController))
 );
 
+router.patch(
+  '/update',
+  validator.updateUserValidator(),
+  validationErrors,
+  verifyToken,
+  catchAsync(userController.updateUser.bind(userController))
+);
+
+router.put(
+  '/changePassword',
+  validator.changePasswordValidator(),
+  validationErrors,
+  verifyToken,
+  catchAsync(userController.changePassword.bind(userController))
+);
+
+router.delete(
+  '/delete',
+  validator.deleteUserValidator(),
+  validationErrors,
+  verifyToken,
+  catchAsync(userController.deleteUser.bind(userController))
+);
+
 export default router;

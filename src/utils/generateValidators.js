@@ -135,16 +135,17 @@ export const validateAcceptedTermsField = (fieldName) => {
     });
 };
 
-export const validatePasswordConfirmationField = (fieldName) => {
+export const validatePasswordConfirmationField = (fieldName, fieldPassword) => {
   return body(fieldName)
     .notEmpty().withMessage(`La confirmación de contraseña es requerida`)
     .custom((value, { req }) => {
-      if (value !== req.body.password) {
+      if (value !== req.body[fieldPassword]) {
         throw new Error("Las contraseñas no coinciden");
       }
       return true;
     });
 };
+
 
 export const validateTokenField = (fieldName) => {
   return body(fieldName)

@@ -13,9 +13,8 @@ class UserController {
   }
 
   async completeProfile(req, res) {
-    // Suponiendo que el email viene autenticado en req.user
-    const { tokenId : Id } = req;
-    const updatedUser = await this.userService.completeUserProfile(Id,{Status : true, ...req.body});
+    const { tokenId: Id } = req;
+    const updatedUser = await this.userService.completeUserProfile(Id, { Status: true, ...req.body });
     res.status(201).json({ status: true, user: updatedUser });
   }
 
@@ -45,6 +44,23 @@ class UserController {
       });
   }
 
+  async updateUser(req, res) {
+    const { tokenId: userId } = req;
+    const { status, message, data } = await this.userService.updateUser(userId, req.body);
+    res.status(200).json({ status: status, message: message, data: data });
+  }
+
+  async deleteUser(req, res) {
+    const { tokenId: userId } = req;
+    const { status, message, data } = await this.userService.deleteUser(userId);
+    res.status(200).json({ status: status, message: message, data: data });
+  }
+
+  async changePassword(req, res) {
+    const { tokenId: userId } = req;
+    const { status, message, data } = await this.userService.changePassword(userId, req.body);
+    res.status(200).json({ status: status, message: message, data: data });
+  }
 }
 
 export default UserController;

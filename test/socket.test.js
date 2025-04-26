@@ -2,7 +2,7 @@
 import { io } from "socket.io-client";
 
 // ... (configuración de conexión y token) ...
-const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTYyOTk0NywiZXhwIjoxNzQ1NjMzNTQ3fQ.-g8W2Q9RDB9duC5PZlaOceso39_caTrcFTs9iNNm9A8"; // Reemplaza con un token válido
+const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImUxYTc4YWQ5LTg3MWItNDVhMC1iMjNiLTAzNWVjZmFhODIwNiIsImVtYWlsIjoic2ViYXNqaW1lbmV6MTEyMUBnbWFpbC5jb20iLCJjb21wbGV0ZWRQZXJmaWwiOnRydWUsImlhdCI6MTc0NTY4MzczNSwiZXhwIjoxNzQ1Njg3MzM1fQ.nbZo655E3gcC298XXZb50xZsuswYpQRXEVW129EPtEs"; // Reemplaza con un token válido
 const socket = io("http://localhost:10101", { // O tu URL de producción
   auth: {
     token: `bearer ${token}`
@@ -30,6 +30,10 @@ socket.on("connect", () => {
   };
   console.log("Emitiendo getCoinDetailPreferences (ID específico):", requestPrefDataSpecific);
   socket.emit("getCoinDetailPreferences", requestPrefDataSpecific);
+
+  // CASO 3: Con cryptoId específico (ignora preferencias para la selección inicial)
+  
+  // socket.emit('getLiveDataWithPreferences');
 
 });
 
@@ -68,8 +72,9 @@ socket.on("mainCoinsData", (data) => { /* ... */ });
 socket.on("mainCoinUpdate", (data) => { /* ... */ });
 socket.on("secondaryCoinsData", (data) => { /* ... */ });
 socket.on("secondaryCoinUpdate", (data) => { /* ... */ });
-socket.on("preferencesData", (data) => { /* ... */ });
-socket.on("preferenceUpdate", (data) => { /* ... */ }); // Espera [ { datos } ]
+socket.on("preferencesData", (data) => { console.log("preferencesData", data); });
+socket.on("preferenceUpdate", (data) => { console.log("preferenceUpdate", data);
+}); // Espera [ { datos } ]
 socket.on("error", (error) => { console.error("!!! Error recibido del servidor:", error); });
 socket.on("disconnect", () => { console.log("Desconectado del servidor"); });
 socket.on("connect_error", (err) => { console.error("Error de conexión:", err.message, err.data || ''); });

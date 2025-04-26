@@ -205,66 +205,105 @@ class CoinGeckoAdapter {
     }
 
 
-    /**
+/**
      * Obtiene información detallada de una moneda específica por su ID de CoinGecko.
-     * Valida si la moneda tiene par USDT en Binance.
+     * PRIMERO busca en la lista cacheada por `coinsList()`. Si no la encuentra allí,
+     * devuelve null para evitar llamadas excesivas a la API /coins/{id} y prevenir errores 429.
      * @param {string} coinId - El ID de la moneda en CoinGecko (ej. "bitcoin").
-     * @returns {Promise<object | null>} - Objeto formateado de la moneda o null si no es válida o no está en Binance USDT.
+     * @returns {Promise<object | null>} - Objeto formateado de la moneda si se encuentra en la caché, o null si no.
      */
     async coinById(coinId) {
         try {
-            const response = await axios.get(`${this.baseUrl}/coins/${coinId}`, {
-                params: {
-                    localization: false,
-                    tickers: false, // Ya obtenemos tickers de Binance
-                    market_data: true, // Necesitamos market_data para precio, cap, etc.
-                    community_data: false,
-                    developer_data: false,
-                    sparkline: false,
-                },
-            });
-            const coinDataFromGecko = response.data;
+            // 1. Obtener la lista de monedas desde la caché (o generarla si no existe)
+            // Se asume que coinsList() maneja su propia caché y lógica de obtención/filtrado.
+            // Usamos un límite razonable (ej. 250) que probablemente contenga las monedas más solicitadas.
+            // Puedes ajustar este límite si tu caso de uso lo requiere.
+            const cachedCoinsList = await this.coinsList(250); // Llama a la función que usa la caché
 
-            // Ahora, necesitamos validar contra Binance y formatear
-            const binanceSymbolsSet = await this.getBinanceUsdtSymbols();
+            // 2. Buscar la moneda por su 'id' dentro de la lista obtenida
+            const foundCoin = cachedCoinsList.find(coin => coin.id === coinId);
 
-            // Necesitamos crear un objeto compatible con lo que espera formatCoinData
-            // Mapeamos los campos de /coins/{id} a los esperados por /coins/markets
-            const coinMarketData = coinDataFromGecko.market_data;
-            const mappedCoin = {
-                 id: coinDataFromGecko.id,
-                 symbol: coinDataFromGecko.symbol,
-                 name: coinDataFromGecko.name,
-                 image: coinDataFromGecko.image?.large || coinDataFromGecko.image?.small, // Tomar imagen large o small
-                 market_cap: coinMarketData?.market_cap?.usd,
-                 market_cap_rank: coinMarketData?.market_cap_rank,
-                 current_price: coinMarketData?.current_price?.usd,
-                 high_24h: coinMarketData?.high_24h?.usd,
-                 low_24h: coinMarketData?.low_24h?.usd,
-                 price_change_percentage_24h: coinMarketData?.price_change_percentage_24h,
-                 total_volume: coinMarketData?.total_volume?.usd,
-                 last_updated: coinMarketData?.last_updated // CoinGecko provee esto
-             };
-
-            // Formatear y validar
-            const formattedCoin = formatCoinData(mappedCoin, binanceSymbolsSet);
-
-            if (!formattedCoin) {
-                 console.warn(`La moneda ${coinId} no está disponible en Binance USDT o faltan datos.`);
-                 return null; // No encontrada o no válida
+            // 3. Si se encuentra en la lista cacheada, devolverla directamente.
+            // Esta moneda ya debería estar formateada y validada contra Binance
+            // por el proceso dentro de getCoinListFromCoinGecko y formatCoinData.
+            if (foundCoin) {
+                // console.log(`Moneda ${coinId} encontrada en la lista cacheada.`);
+                return foundCoin;
             }
 
-            return formattedCoin;
+            // 4. Si NO se encuentra en la lista cacheada:
+            // Devolvemos null para evitar hacer la llamada individual a la API /coins/{id}
+            // y así prevenir los errores 429 (Too Many Requests).
+            // Esta es la principal diferencia con el enfoque anterior.
+            console.warn(`Moneda con ID '${coinId}' no encontrada en la lista cacheada (top ${cachedCoinsList.length}). No se consultará la API individualmente.`);
+            return null;
 
-        } catch (e) {
-            // Manejar error 404 (Not Found) de CoinGecko específicamente
-            if (e.response && e.response.status === 404) {
-                 console.warn(`Moneda con ID ${coinId} no encontrada en CoinGecko.`);
-                 return null; // No encontrada
+            // --- Alternativa (NO RECOMENDADA SI EL PROBLEMA ES 429) ---
+            // Si *necesitaras* intentar obtener la moneda sí o sí, incluso si no está
+            // en la caché, podrías descomentar el bloque de abajo, pero estarías
+            // expuesto nuevamente a errores 429 para esas monedas menos comunes.
+            /*
+            console.warn(`Moneda ${coinId} no encontrada en caché. Intentando consulta individual a la API...`);
+            try {
+                const response = await axios.get(`${this.baseUrl}/coins/${coinId}`, {
+                    params: {
+                        localization: false,
+                        tickers: false,
+                        market_data: true,
+                        community_data: false,
+                        developer_data: false,
+                        sparkline: false,
+                    },
+                });
+                const coinDataFromGecko = response.data;
+                const binanceSymbolsSet = await this.getBinanceUsdtSymbols();
+                const coinMarketData = coinDataFromGecko.market_data;
+                const mappedCoin = {
+                     id: coinDataFromGecko.id,
+                     symbol: coinDataFromGecko.symbol,
+                     name: coinDataFromGecko.name,
+                     image: coinDataFromGecko.image?.large || coinDataFromGecko.image?.small,
+                     market_cap: coinMarketData?.market_cap?.usd,
+                     market_cap_rank: coinMarketData?.market_cap_rank,
+                     current_price: coinMarketData?.current_price?.usd,
+                     high_24h: coinMarketData?.high_24h?.usd,
+                     low_24h: coinMarketData?.low_24h?.usd,
+                     price_change_percentage_24h: coinMarketData?.price_change_percentage_24h,
+                     total_volume: coinMarketData?.total_volume?.usd,
+                     last_updated: coinMarketData?.last_updated
+                 };
+                const formattedCoin = formatCoinData(mappedCoin, binanceSymbolsSet);
+                if (!formattedCoin) {
+                     console.warn(`La moneda ${coinId} (obtenida individualmente) no está disponible en Binance USDT o faltan datos.`);
+                     return null;
+                }
+                return formattedCoin;
+            } catch (individualError) {
+                if (individualError.response && individualError.response.status === 404) {
+                     console.warn(`Moneda con ID ${coinId} no encontrada en CoinGecko (API individual).`);
+                     return null;
+                }
+                 // Si es un error 429 aquí, lo reportamos
+                if (individualError.response && individualError.response.status === 429) {
+                    console.error(`Error 429 al obtener detalles individuales de ${coinId}. Rate limit excedido.`);
+                } else {
+                    console.error(`Error al obtener detalles individuales de ${coinId}: ${individualError.message}`);
+                }
+                // Lanzamos un AppError específico para el fallo individual
+                throw new AppError(`Error en fallback coinById (${coinId}): ${individualError.message}`, individualError.response?.status || 505);
             }
-            console.error(`Error al obtener detalles de ${coinId}: ${e.message}`);
-            // Podrías querer lanzar un AppError específico o simplemente null/re-lanzar
-            throw new AppError(`Error en coinById (${coinId}): ${e.message}`, e.response?.status || 505);
+            */
+            // --- Fin de la Alternativa ---
+
+        } catch (error) {
+            // Captura errores generales, incluyendo los que puedan venir de this.coinsList()
+            console.error(`Error en coinById buscando ${coinId} (posiblemente desde caché): ${error.message}`);
+            // Re-lanzar como AppError para manejo consistente en capas superiores
+            if (error instanceof AppError) {
+                throw error;
+            }
+            // Usar un código de estado genérico si no es un AppError conocido
+            throw new AppError(`Error procesando coinById para ${coinId}: ${error.message}`, 500);
         }
     }
 

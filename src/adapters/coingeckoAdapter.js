@@ -62,9 +62,9 @@ class CoinGeckoAdapter {
         try {
             const binanceSymbolsSet = await this.getBinanceUsdtSymbols();
             if (binanceSymbolsSet.size === 0) {
-                 console.warn("No se pudieron obtener los símbolos de Binance. La lista de CoinGecko no se filtrará.");
-                 // Considera si devolver vacío o continuar sin filtrar
-                 // return [];
+                console.warn("No se pudieron obtener los símbolos de Binance. La lista de CoinGecko no se filtrará.");
+                // Considera si devolver vacío o continuar sin filtrar
+                // return [];
             }
 
             // console.log(`Obteniendo página ${page} (${perPage} coins) de CoinGecko...`);
@@ -152,9 +152,9 @@ class CoinGeckoAdapter {
 
             // Guardar en caché solo si obtuvimos resultados
             if (finalRanking.length > 0) {
-               await this.redisRepository.set(cacheKey, finalRanking, 60); // Cache por 60 segundos
+                await this.redisRepository.set(cacheKey, finalRanking, 60); // Cache por 60 segundos
             } else {
-               console.warn("No se generaron monedas para el ranking después de filtrar.");
+                console.warn("No se generaron monedas para el ranking después de filtrar.");
             }
 
             return finalRanking;
@@ -169,7 +169,7 @@ class CoinGeckoAdapter {
     /**
      * Obtiene una lista más completa de monedas disponibles en Binance USDT, combinando potencialmente
      * varias páginas de CoinGecko si fuera necesario.
-     * Se almacena en caché en Redis por 300 segundos.
+     * Se almacena en caché en Redis por 900 segundos (15 minutos)
      * @param {number} limit - Número aproximado deseado de monedas en la lista final.
      * @returns {Promise<Array<object>>} - Array de monedas formateadas.
      */
@@ -178,7 +178,7 @@ class CoinGeckoAdapter {
         try {
             let coins = await this.redisRepository.get(cacheKey);
             if (coins && Array.isArray(coins) && coins.length > 0) {
-                 // console.log(`Usando lista de monedas (${limit}) cacheada.`);
+                // console.log(`Usando lista de monedas (${limit}) cacheada.`);
                 return coins;
             }
 
@@ -192,9 +192,9 @@ class CoinGeckoAdapter {
             const finalList = firstPageCoins.slice(0, limit); // Limitar al número deseado
 
             if (finalList.length > 0) {
-                await this.redisRepository.set(cacheKey, finalList, 300); // Cache por 5 minutos
+                await this.redisRepository.set(cacheKey, finalList, 900); // Cache por 15 minutos
             } else {
-                 console.warn("No se generaron monedas para la lista completa después de filtrar.");
+                console.warn("No se generaron monedas para la lista completa después de filtrar.");
             }
 
             return finalList;
@@ -205,13 +205,13 @@ class CoinGeckoAdapter {
     }
 
 
-/**
-     * Obtiene información detallada de una moneda específica por su ID de CoinGecko.
-     * PRIMERO busca en la lista cacheada por `coinsList()`. Si no la encuentra allí,
-     * devuelve null para evitar llamadas excesivas a la API /coins/{id} y prevenir errores 429.
-     * @param {string} coinId - El ID de la moneda en CoinGecko (ej. "bitcoin").
-     * @returns {Promise<object | null>} - Objeto formateado de la moneda si se encuentra en la caché, o null si no.
-     */
+    /**
+         * Obtiene información detallada de una moneda específica por su ID de CoinGecko.
+         * PRIMERO busca en la lista cacheada por `coinsList()`. Si no la encuentra allí,
+         * devuelve null para evitar llamadas excesivas a la API /coins/{id} y prevenir errores 429.
+         * @param {string} coinId - El ID de la moneda en CoinGecko (ej. "bitcoin").
+         * @returns {Promise<object | null>} - Objeto formateado de la moneda si se encuentra en la caché, o null si no.
+         */
     async coinById(coinId) {
         try {
             // 1. Obtener la lista de monedas desde la caché (o generarla si no existe)
@@ -327,8 +327,8 @@ class CoinGeckoAdapter {
             return arrayToObjectByKey(filtered, "binanceSymbol");
 
         } catch (e) {
-             console.error(`Error al buscar monedas por símbolo ${symbolQuery}: ${e.message}`);
-             throw new AppError(e.message, 505); // Re-lanzar
+            console.error(`Error al buscar monedas por símbolo ${symbolQuery}: ${e.message}`);
+            throw new AppError(e.message, 505); // Re-lanzar
         }
     }
 
@@ -336,7 +336,7 @@ class CoinGeckoAdapter {
     // --- Métodos de Conversión y Forex (sin cambios importantes requeridos por ahora) ---
 
     async getAllForeignExchange() {
-      // ... (código existente)
+        // ... (código existente)
         try {
             const foreignExchangeList = await this.redisRepository.get('foreignExchangeList');
             if (foreignExchangeList && Array.isArray(foreignExchangeList) && foreignExchangeList.length > 0) {
@@ -351,13 +351,13 @@ class CoinGeckoAdapter {
                 throw new AppError('No se encontró el recurso de divisas buscado', 404);
             }
         } catch (e) {
-             console.error(`Error al obtener lista de divisas: ${e.message}`);
-             throw new AppError(e.message, 505);
+            console.error(`Error al obtener lista de divisas: ${e.message}`);
+            throw new AppError(e.message, 505);
         }
     }
 
     async convertirCryptoAmoneda(cryptoId, fiatCurrency, cantidadCrypto) {
-     // ... (código existente, parece correcto usar CoinGecko para esto)
+        // ... (código existente, parece correcto usar CoinGecko para esto)
         try {
             const moneda = fiatCurrency.toLowerCase();
             const response = await axios.get(`${this.baseUrl}/simple/price`, {
@@ -369,7 +369,7 @@ class CoinGeckoAdapter {
 
             // Verificar si la respuesta contiene los datos esperados
             if (!response.data || !response.data[cryptoId] || response.data[cryptoId][moneda] === undefined) {
-                 throw new AppError(`No se pudo obtener el precio para ${cryptoId} en ${moneda}`, 404);
+                throw new AppError(`No se pudo obtener el precio para ${cryptoId} en ${moneda}`, 404);
             }
 
             const precio = response.data[cryptoId][moneda];
@@ -385,8 +385,8 @@ class CoinGeckoAdapter {
             if (error instanceof AppError) {
                 throw error;
             }
-             console.error(`Error en conversión ${cryptoId} a ${fiatCurrency}: ${error.message}`);
-             throw new AppError(error.message, error.response?.status || 505);
+            console.error(`Error en conversión ${cryptoId} a ${fiatCurrency}: ${error.message}`);
+            throw new AppError(error.message, error.response?.status || 505);
         }
     }
 }
